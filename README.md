@@ -163,6 +163,4 @@ pip install -e ".[test]"
 pytest
 ```
 
-`examples/workflows/ci.yml` runs the tests on Python 3.8 and 3.12 and self-tests the Action. Move it to
-`.github/workflows/` to enable it (pushing workflow files needs a token with the `workflow` scope:
-`gh auth refresh -s workflow`).
+`.github/workflows/ci.yml` runs the tests on Python 3.8 and 3.12 and self-tests the Action.
