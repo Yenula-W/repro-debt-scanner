@@ -247,3 +247,33 @@ def test_r_description_declares_packages(scan):
               "analysis.R": "set.seed(1)\nlibrary(dplyr)\nlibrary(tidyr)\nx <- sample(1:3)\n"})
     assert [f.detail for f in checks_of(r, "DEP003")] == ["tidyr"]
     assert checks_of(r, "RAND001") == []
+
+
+# ---------------------------------------------------------------- regressions from real repos
+
+def test_downloaded_files_are_not_missing(scan):
+    nb = notebook([
+        ("!wget https://example.org/files/a.csv", 1),
+        ("!curl -o b.csv https://example.org/x", 2),
+        ("import wget\nwget.download('https://example.org/c.csv')", 3),
+        ("from urllib.request import urlretrieve\nurlretrieve('https://x.org/q', 'd.csv')", 4),
+        ("import numpy as np\nfor f in ['a.csv']: pass\nnp.loadtxt('a.csv'); np.loadtxt('b.csv')\n"
+         "np.loadtxt('c.csv'); np.loadtxt('d.csv')", 5),
+    ])
+    r = scan({"a.ipynb": nb, "requirements.txt": "numpy==1\nwget==3\n"})
+    assert checks_of(r, "DATA001") == []
+
+
+def test_relative_path_matching_other_working_dir(scan):
+    # R packages: code in R/ reads "data/x.csv" relative to vignettes/
+    r = scan({"requirements.txt": None, "DESCRIPTION": "Package: mypkg\nImports: dplyr\nLicense: MIT\n",
+              "vignettes/data/x.csv": "a\n", "R/functions.R": 'f <- function() read.csv("data/x.csv")\n',
+              "vignettes/report.Rmd": "```{r}\nlibrary(mypkg)\nlibrary(dplyr)\n```\n"})
+    assert checks_of(r, "DATA001") == []
+    assert checks_of(r, "DEP003") == []
+
+
+def test_dep002_counts_unique_packages(scan):
+    r = scan({"requirements.txt": None, "DESCRIPTION": "Package: p\nImports: dplyr\nSuggests: dplyr, knitr\n",
+              "a.R": "library(dplyr)\n"})
+    assert "2 of 2 packages" in checks_of(r, "DEP002")[0].message

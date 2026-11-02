@@ -81,7 +81,7 @@ def _third_party_imports(repo: Repo, facts: List[UnitFacts]) -> "OrderedDict[Tup
                 if mod in STDLIB or mod in local or mod.startswith("_"):
                     continue
             else:
-                if mod in R_BASE:
+                if mod in R_BASE or mod in local:
                     continue
             out.setdefault((fa.unit.lang, mod), (fa.unit.path, ref.cell, ref.line))
     return out
@@ -108,7 +108,7 @@ def _deps(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
         if not repo.has_lock:
             for d in repo.deps:
                 if d.unpinned:
-                    names = [n for n, _ in d.unpinned]
+                    names = list(OrderedDict.fromkeys(n for n, _ in d.unpinned))
                     shown = ", ".join(names[:6]) + (f" (+{len(names) - 6} more)" if len(names) > 6 else "")
                     f.append(Finding("DEP002", f"{len(names)} of {len(d.names)} packages in {d.file} have no exact "
                                      f"version: {shown}.", d.file, d.unpinned[0][1], detail=d.file))
@@ -130,7 +130,28 @@ def _candidates(unit_path: str, p: str) -> List[str]:
     return [x for x in c if not x.startswith("../")] or c
 
 
+def _suffixes(repo: Repo) -> Set[str]:
+    """Every contiguous run of path segments of every file (so directories match too)."""
+    cached = getattr(repo, "_suffix_cache", None)
+    if cached is None:
+        cached = set()
+        for rel in repo.files:
+            parts = rel.split("/")
+            for i in range(len(parts)):
+                for j in range(i + 1, len(parts) + 1):
+                    cached.add("/".join(parts[i:j]))
+        repo._suffix_cache = cached  # type: ignore[attr-defined]
+    return cached
+
+
 def _exists(repo: Repo, cands: List[str]) -> bool:
+    # Scripts often run from another working directory (R vignettes, notebooks in subfolders), so a
+    # relative path that matches the tail of any file in the repo counts as present.
+    suffixes = _suffixes(repo)
+    for c in cands:
+        tail = re.sub(r"^(\.\./)+", "", c).rstrip("/")
+        if tail in suffixes:
+            return True
     for c in cands:
         if any(ch in c for ch in "*?["):
             if glob.glob(str(repo.root / c)):
@@ -220,7 +241,8 @@ def _notebooks(facts: List[UnitFacts], f: List[Finding]) -> None:
         for (pi, pc), (ci, cc) in zip(counts, counts[1:]):
             if cc <= pc:
                 out_of_order = True
-                f.append(Finding("NB001", f"Cell {ci} (run #{cc}) was executed before cell {pi} (run #{pc}); "
+                how = "has the same run number as" if cc == pc else "was executed before"
+                f.append(Finding("NB001", f"Cell {ci} (run #{cc}) {how} cell {pi} (run #{pc}) above it; "
                                  "the saved results came from running cells out of order.", u.path, None, ci,
                                  detail=u.path))
                 break

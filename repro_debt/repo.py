@@ -370,6 +370,9 @@ def _parse_description(repo: Repo, rel: str, text: str) -> None:
             d.names[norm_dist(name)] = line
             if "==" not in item:
                 d.unpinned.append((name, line))
+    m = re.search(r"^Package:\s*(\S+)", text, re.M)
+    if m:
+        repo.local_modules.add(m.group(1))
     if re.search(r"^License:", text, re.M):
         repo.license_found = True
     repo.deps.append(d)

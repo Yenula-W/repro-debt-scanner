@@ -252,6 +252,7 @@ def analyze_python(unit: CodeUnit) -> UnitFacts:
         src = clean_cell_source(cell.source) if unit.is_notebook else cell.source
         if src is None:
             continue
+        _shell_downloads(cell, facts)
         if unit.is_notebook and re.search(r"^\s*%(run|store\s+-r|load)\b", cell.source, re.M):
             facts.cell_flow.append((cell.index or 0, set(), [], True))
         try:
@@ -270,6 +271,30 @@ def analyze_python(unit: CodeUnit) -> UnitFacts:
     else:
         facts.is_entrypoint = True
     return facts
+
+
+SHELL_DL = re.compile(r"^\s*!\s*(wget|curl)\b(.*)$", re.M)
+
+
+def _shell_downloads(cell: Cell, facts: UnitFacts) -> None:
+    """`!wget URL [-O out]` / `!curl -o out URL` in notebook cells create files."""
+    for m in SHELL_DL.finditer(cell.source):
+        args = m.group(2).split()
+        out = None
+        for i, a in enumerate(args):
+            if a in ("-O", "-o", "--output", "--output-document") and i + 1 < len(args):
+                out = args[i + 1]
+            elif a.startswith("--output-document="):
+                out = a.split("=", 1)[1]
+            elif a.startswith("-P") and m.group(1) == "wget":
+                pass
+        if out is None:
+            urls = [a for a in args if "://" in a]
+            if urls:
+                out = posixpath.basename(urls[0].strip("'\"").split("?")[0])
+        if out:
+            line = cell.source.count("\n", 0, m.start()) + 1
+            facts.writes.append(Ref(out.strip("'\""), cell.index, line))
 
 
 def _is_script(src: str, facts: UnitFacts) -> bool:
@@ -338,6 +363,19 @@ def _scan_call(node: ast.Call, cell: Cell, facts: UnitFacts, resolver: _Resolver
             facts.random_uses.append(Ref(chain, cell.index, line))
     if any(kw.arg == "random_state" for kw in node.keywords):
         facts.has_seed = True
+
+    # ---- downloads produce files
+    if name in ("download", "urlretrieve", "download_url", "download_file", "hf_hub_download"):
+        target = _first_path_arg(node, resolver, (1,)) if name == "urlretrieve" else None
+        for kw in node.keywords:
+            if kw.arg in ("out", "filename", "fname", "path", "local_filename", "dest"):
+                target = resolver.resolve(kw.value) or target
+        url = _first_path_arg(node, resolver, (0,))
+        if target is None and url and "://" in url:
+            target = posixpath.basename(url.split("?")[0])
+        if target:
+            facts.writes.append(Ref(target, cell.index, line))
+        return
 
     # ---- file reads
     if name == "open" or (name == "File" and root in ("h5py", "File")):
