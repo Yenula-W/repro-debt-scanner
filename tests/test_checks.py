@@ -277,3 +277,46 @@ def test_dep002_counts_unique_packages(scan):
     r = scan({"requirements.txt": None, "DESCRIPTION": "Package: p\nImports: dplyr\nSuggests: dplyr, knitr\n",
               "a.R": "library(dplyr)\n"})
     assert "2 of 2 packages" in checks_of(r, "DEP002")[0].message
+
+
+# ---------------------------------------------------------------- false alarms found on real paper repos
+
+def test_data001_files_inside_bundled_zip_count_as_present(make_repo):
+    import zipfile
+    from repro_debt.checks import run_checks
+    from repro_debt.repo import load_repo
+    root = make_repo({"notebooks/figs.py": 'import pandas as pd\npd.read_csv("../data/table.csv")\n',
+                      "requirements.txt": "pandas==2.2.0\n"})
+    with zipfile.ZipFile(root / "data.zip", "w") as z:
+        z.writestr("data/table.csv", "a\n1\n")
+    assert checks_of(run_checks(load_repo(str(root))), "DATA001") == []
+
+
+def test_data001_skips_paths_a_shell_script_creates(scan):
+    r = scan({"test.sh": "gpu-coloc -r --results example/example_results.tsv\n",
+              "plot.py": 'import pandas as pd\npd.read_csv("example/example_results.tsv")\n',
+              "requirements.txt": "pandas==2.2.0\n"})
+    assert checks_of(r, "DATA001") == []
+
+
+def test_data001_still_flags_undocumented_missing_file(scan):
+    r = scan({"plot.py": 'import pandas as pd\npd.read_csv("secret/raw.csv")\n',
+              "requirements.txt": "pandas==2.2.0\n"})
+    assert len(checks_of(r, "DATA001")) == 1
+
+
+def test_dep003_ignores_setuptools_in_setup_py(scan):
+    r = scan({"setup.py": "from setuptools import setup\nsetup(name='x')\n"})
+    assert checks_of(r, "DEP003") == []
+
+
+def test_dep003_conda_r_package_names(scan):
+    r = scan({"environment.yml": "dependencies:\n  - r-ggplot2=3.5.0\n  - bioconductor-deseq2=1.42.0\n",
+              "fig.R": "library(ggplot2)\nlibrary(DESeq2)\n"})
+    assert checks_of(r, "DEP003") == []
+
+
+def test_dep001_conda_env_with_unusual_name_counts(scan):
+    r = scan({"requirements.txt": None, "requirements.yml": "name: x\ndependencies:\n  - numpy=1.26.4\n",
+              "run.py": "import numpy\n"})
+    assert checks_of(r, "DEP001") == [] and checks_of(r, "DEP003") == []

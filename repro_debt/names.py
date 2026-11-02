@@ -60,6 +60,8 @@ IMPORT_TO_DIST = {
     "docx": ["python-docx"],
     "pptx": ["python-pptx"],
     "umap": ["umap-learn"],
+    "soundfile": ["soundfile", "pysoundfile"],
+    "RNA": ["viennarna"],
     "community": ["python-louvain"],
     "igraph": ["python-igraph", "igraph"],
     "osgeo": ["gdal"],

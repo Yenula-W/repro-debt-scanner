@@ -4,6 +4,8 @@ from __future__ import annotations
 import glob
 import posixpath
 import re
+import tarfile
+import zipfile
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
@@ -102,6 +104,8 @@ def _deps(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
     else:
         for (lang, mod), (path, cell, line) in imports.items():
             cands = import_candidates(mod) if lang == "python" else [norm_dist(mod)]
+            if mod in ("setuptools", "distutils") and posixpath.basename(path) == "setup.py":
+                continue  # build tooling, installed by pip itself
             if not any(c in declared for c in cands):
                 f.append(Finding("DEP003", f"`{mod}` is imported but not listed in any dependency file "
                                  f"({', '.join(d.file for d in repo.deps[:3])}).", path, line, cell, detail=mod))
@@ -135,13 +139,61 @@ def _suffixes(repo: Repo) -> Set[str]:
     cached = getattr(repo, "_suffix_cache", None)
     if cached is None:
         cached = set()
-        for rel in repo.files:
+        for rel in repo.files + _archive_members(repo):
             parts = rel.split("/")
             for i in range(len(parts)):
                 for j in range(i + 1, len(parts) + 1):
                     cached.add("/".join(parts[i:j]))
         repo._suffix_cache = cached  # type: ignore[attr-defined]
     return cached
+
+
+def _archive_members(repo: Repo) -> List[str]:
+    """Files bundled in a zip/tar in the repo (e.g. `unzip data.zip` in the README) count as present."""
+    out: List[str] = []
+    for rel in repo.files:
+        lower = rel.lower()
+        path = str(repo.root / rel)
+        base = posixpath.dirname(rel)
+        try:
+            if lower.endswith(".zip"):
+                with zipfile.ZipFile(path) as z:
+                    names = z.namelist()
+            elif lower.endswith((".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz")):
+                with tarfile.open(path) as t:
+                    names = t.getnames()
+            else:
+                continue
+        except (OSError, zipfile.BadZipFile, tarfile.TarError, EOFError):
+            continue  # LFS pointer, partial clone or corrupt archive
+        out.extend(posixpath.join(base, n).lstrip("./") if base else n.lstrip("./") for n in names)
+    return out
+
+
+def _doc_text(repo: Repo) -> str:
+    """README plus shell scripts and Makefiles: places that document how inputs get created."""
+    cached = getattr(repo, "_doc_cache", None)
+    if cached is None:
+        parts = [repo.readme]
+        for rel in repo.files:
+            name = posixpath.basename(rel)
+            if rel.endswith((".sh", ".bash")) or name in ("Makefile", "Snakefile", "justfile"):
+                try:
+                    parts.append((repo.root / rel).read_text(encoding="utf-8", errors="replace")[:200_000])
+                except OSError:
+                    pass
+        cached = "\n".join(parts)
+        repo._doc_cache = cached  # type: ignore[attr-defined]
+    return cached
+
+
+def _documented(repo: Repo, p: str) -> bool:
+    tail = re.sub(r"^(\./|\.\./)+", "", p).rstrip("/")
+    if not tail:
+        return False
+    doc = _doc_text(repo)
+    top = tail.split("/")[0]
+    return tail in doc or ("/" in tail and re.search(r"(?<![\w.-])" + re.escape(top) + r"/", doc) is not None)
 
 
 def _exists(repo: Repo, cands: List[str]) -> bool:
@@ -209,7 +261,7 @@ def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> Non
                                  f"`{producer}` must run first.", fa.unit.path, ref.line, ref.cell,
                                  detail=f"{producer} -> {fa.unit.path}"))
                 continue
-            if fa_key in seen_missing:
+            if fa_key in seen_missing or _documented(repo, p):
                 continue
             seen_missing.add(fa_key)
             f.append(Finding("DATA001", f"Reads `{p}`, which is not in the repository and no script creates it.",

@@ -155,6 +155,8 @@ def _classify(repo: Repo, rel: str) -> None:
         repo.deps.append(_parse_requirements(rel, _read(p) or ""))
     elif re.match(r"(environment|env|conda).*\.ya?ml$", lower) and depth <= 2:
         repo.deps.append(_parse_env_yml(rel, _read(p) or ""))
+    elif re.search(r"\.ya?ml$", lower) and depth <= 1 and _is_conda_env(_read(p) or ""):
+        repo.deps.append(_parse_env_yml(rel, _read(p) or ""))  # e.g. requirements.yml
     elif name == "pyproject.toml":
         _parse_pyproject(repo, rel, _read(p) or "")
     elif name == "setup.cfg":
@@ -238,6 +240,10 @@ def _parse_requirements(rel: str, text: str) -> DepSpec:
     return d
 
 
+def _is_conda_env(text: str) -> bool:
+    return bool(re.search(r"^dependencies\s*:", text, re.M) and re.search(r"^(channels|name)\s*:", text, re.M))
+
+
 def _parse_env_yml(rel: str, text: str) -> DepSpec:
     d = DepSpec(rel)
     in_deps = False
@@ -266,6 +272,8 @@ def _parse_env_yml(rel: str, text: str) -> DepSpec:
         if name.lower() == "pip":
             continue
         d.names[norm_dist(name)] = n
+        if name.lower().startswith(("r-", "bioconductor-")):  # conda's names for R packages
+            d.names[norm_dist(name.split("-", 1)[1])] = n
         rest = item[len(name):]
         if not re.search(r"=\s*[0-9]", rest):
             d.unpinned.append((name, n))
