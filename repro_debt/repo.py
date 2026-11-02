@@ -204,10 +204,15 @@ def _load_notebook(p: Path, rel: str) -> Optional[CodeUnit]:
     for i, c in enumerate(nb.get("cells") or [], start=1):
         if not isinstance(c, dict):
             continue
-        src = c.get("source", "")
+        src = c.get("source") or ""
         if isinstance(src, list):
-            src = "".join(src)
-        cells.append(Cell(i, src, c.get("execution_count"), c.get("outputs") or [], c.get("cell_type", "code")))
+            src = "".join(s for s in src if isinstance(s, str))
+        if not isinstance(src, str):
+            src = ""
+        count = c.get("execution_count")
+        count = count if isinstance(count, int) and not isinstance(count, bool) else None
+        outputs = c.get("outputs")
+        cells.append(Cell(i, src, count, outputs if isinstance(outputs, list) else [], c.get("cell_type", "code")))
     ver = (meta.get("language_info") or {}).get("version")
     return CodeUnit(rel, lang, True, cells, nb_python_version=ver)
 
