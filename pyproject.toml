@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repro-debt-scanner"
+version = "0.1.0"
+description = "Scan a research code repository and get a scored, prioritized reproducibility report."
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+repro-debt = "repro_debt.cli:main"
+
+[tool.setuptools]
+packages = ["repro_debt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
