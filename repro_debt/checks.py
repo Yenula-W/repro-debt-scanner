@@ -148,6 +148,9 @@ def _suffixes(repo: Repo) -> Set[str]:
     return cached
 
 
+DEPOSIT = re.compile(r"zenodo\.org|figshare\.com|osf\.io|datadryad\.org|dataverse|ebi\.ac\.uk/biostudies", re.I)
+
+
 def _archive_members(repo: Repo) -> List[str]:
     """Files bundled in a zip/tar in the repo (e.g. `unzip data.zip` in the README) count as present."""
     out: List[str] = []
@@ -264,7 +267,10 @@ def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> Non
             if fa_key in seen_missing or _documented(repo, p):
                 continue
             seen_missing.add(fa_key)
-            f.append(Finding("DATA001", f"Reads `{p}`, which is not in the repository and no script creates it.",
+            deposit = DEPOSIT.search(repo.readme)
+            f.append(Finding("DATA001", f"Reads `{p}`, which is not in the repository and no script creates it."
+                             + (f" The README links a data deposit ({deposit.group(0)}): check this file is in it "
+                                "and say where to put it." if deposit else ""),
                              fa.unit.path, ref.line, ref.cell, detail=p))
 
 

@@ -320,3 +320,10 @@ def test_dep001_conda_env_with_unusual_name_counts(scan):
     r = scan({"requirements.txt": None, "requirements.yml": "name: x\ndependencies:\n  - numpy=1.26.4\n",
               "run.py": "import numpy\n"})
     assert checks_of(r, "DEP001") == [] and checks_of(r, "DEP003") == []
+
+
+def test_data001_mentions_linked_deposit(scan):
+    r = scan({"README.md": "# x\nRun `python plot.py`. Data: https://zenodo.org/records/1\n",
+              "plot.py": 'import numpy as np\nnp.loadtxt("results/r1.csv")\n'})
+    f = checks_of(r, "DATA001")
+    assert len(f) == 1 and "zenodo.org" in f[0].message
