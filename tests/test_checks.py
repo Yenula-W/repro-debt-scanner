@@ -327,3 +327,10 @@ def test_data001_mentions_linked_deposit(scan):
               "plot.py": 'import numpy as np\nnp.loadtxt("results/r1.csv")\n'})
     f = checks_of(r, "DATA001")
     assert len(f) == 1 and "zenodo.org" in f[0].message
+
+
+def test_dep001_colab_pip_install_counts_as_declared(scan):
+    r = scan({"requirements.txt": None,
+              "colab.ipynb": notebook([("!pip install biopython==1.83 pandas", 1), ("import Bio\nimport pandas", 2)])})
+    assert checks_of(r, "DEP001") == [] and checks_of(r, "DEP003") == []
+    assert any("pandas" in f.message for f in checks_of(r, "DEP002"))

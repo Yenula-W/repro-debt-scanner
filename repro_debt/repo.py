@@ -129,6 +129,7 @@ def _classify(repo: Repo, rel: str) -> None:
         unit = _load_notebook(p, rel)
         if unit:
             repo.units.append(unit)
+            _parse_notebook_installs(repo, unit)
     elif lower.endswith(".r") or lower.endswith(".rmd"):
         src = _read(p)
         if src is not None:
@@ -242,6 +243,20 @@ def _parse_requirements(rel: str, text: str) -> DepSpec:
 
 def _is_conda_env(text: str) -> bool:
     return bool(re.search(r"^dependencies\s*:", text, re.M) and re.search(r"^(channels|name)\s*:", text, re.M))
+
+
+def _parse_notebook_installs(repo: Repo, unit: CodeUnit) -> None:
+    """`!pip install x` / `%pip install x` cells (Colab-style) declare dependencies too."""
+    reqs: List[str] = []
+    for cell in unit.cells:
+        for line in cell.source.splitlines():
+            m = re.match(r"^\s*[!%]\s*(?:python3?\s+-m\s+)?pip\s+install\s+(.+)$", line)
+            if m:
+                reqs += [t.strip("'\"") for t in m.group(1).split() if not t.startswith("-")]
+    if reqs:
+        d = DepSpec(unit.path)
+        _add_reqs(d, reqs, 1)
+        repo.deps.append(d)
 
 
 def _parse_env_yml(rel: str, text: str) -> DepSpec:
