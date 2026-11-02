@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 from . import __version__
 from .checks import run_checks
@@ -13,8 +13,8 @@ from .repo import load_repo
 from .report import build, to_github_annotations, to_json, to_markdown
 
 
-def scan_path(path: str) -> Dict:
-    repo = load_repo(path)
+def scan_path(path: str, exclude: Sequence[str] = ()) -> Dict:
+    repo = load_repo(path, exclude)
     return build(run_checks(repo), Path(path).resolve().name)
 
 
@@ -30,8 +30,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--json", metavar="FILE", help="also write the JSON report to FILE")
     s.add_argument("--github-annotations", action="store_true",
                    help="print GitHub Actions ::error/::warning annotations")
+    s.add_argument("--annotation-prefix", default=None, metavar="DIR",
+                   help="prefix for annotation file paths (default: the scanned path)")
     s.add_argument("--fail-above", type=int, default=None, metavar="N",
                    help="exit with status 1 if the debt score is above N")
+    s.add_argument("--exclude", action="append", default=[], metavar="GLOB",
+                   help="skip files/dirs matching GLOB, relative to the scanned path (repeatable)")
     s.add_argument("--quiet", "-q", action="store_true", help="print nothing to stdout")
     sub.add_parser("checks", help="list all checks")
     args = ap.parse_args(argv)
@@ -47,7 +51,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"error: {args.path} is not a directory", file=sys.stderr)
         return 2
 
-    report = scan_path(args.path)
+    report = scan_path(args.path, args.exclude)
     md, js = to_markdown(report), to_json(report)
     if args.md:
         Path(args.md).write_text(md, encoding="utf-8")
@@ -59,7 +63,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.format in ("json", "both"):
             print(js)
     if args.github_annotations:
-        print(to_github_annotations(report))
+        prefix = args.annotation_prefix if args.annotation_prefix is not None else args.path
+        print(to_github_annotations(report, "" if Path(prefix).is_absolute() else prefix))
     if args.fail_above is not None and report["score"]["debt"] > args.fail_above:
         return 1
     return 0

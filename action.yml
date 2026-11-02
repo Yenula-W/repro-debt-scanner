@@ -1,0 +1,109 @@
+name: "Reproducibility Debt Scanner"
+description: "Scan research code (Python, Jupyter, R) for reproducibility debt and post a scored, prioritized report."
+branding:
+  icon: "check-circle"
+  color: "green"
+
+inputs:
+  path:
+    description: "Directory to scan, relative to the workspace."
+    default: "."
+  exclude:
+    description: "Space-separated globs/dirs to skip, e.g. 'tests examples/*'."
+    default: ""
+  fail-above:
+    description: "Fail the job if the debt score is above this number. Empty = never fail."
+    default: ""
+  comment:
+    description: "Post (or update) a summary comment on pull requests. Needs `pull-requests: write`."
+    default: "true"
+  annotations:
+    description: "Annotate files with findings."
+    default: "true"
+  python-version:
+    description: "Python used to run the scanner (not your project's Python)."
+    default: "3.11"
+  github-token:
+    description: "Token used to post the PR comment."
+    default: ${{ github.token }}
+
+outputs:
+  score:
+    description: "Debt score (lower is better)."
+    value: ${{ steps.scan.outputs.score }}
+  grade:
+    description: "Letter grade A-F."
+    value: ${{ steps.scan.outputs.grade }}
+  report-md:
+    description: "Path to the Markdown report."
+    value: ${{ steps.scan.outputs.report_md }}
+  report-json:
+    description: "Path to the JSON report."
+    value: ${{ steps.scan.outputs.report_json }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install repro-debt-scanner
+      shell: bash
+      run: python -m pip install --quiet "${{ github.action_path }}"
+
+    - name: Scan
+      id: scan
+      shell: bash
+      env:
+        SCAN_PATH: ${{ inputs.path }}
+        ANNOTATE: ${{ inputs.annotations }}
+        EXCLUDE: ${{ inputs.exclude }}
+      run: |
+        out="${RUNNER_TEMP}/repro-debt"
+        mkdir -p "$out"
+        args=(scan "$SCAN_PATH" -q --md "$out/report.md" --json "$out/report.json")
+        if [ "$ANNOTATE" = "true" ]; then args+=(--github-annotations); fi
+        for g in $EXCLUDE; do args+=(--exclude "$g"); done
+        repro-debt "${args[@]}"
+        cat "$out/report.md" >> "$GITHUB_STEP_SUMMARY"
+        python - "$out" <<'PY' >> "$GITHUB_OUTPUT"
+        import json, sys
+        out = sys.argv[1]
+        d = json.load(open(f"{out}/report.json"))
+        print(f"score={d['score']['debt']}")
+        print(f"grade={d['score']['grade']}")
+        print(f"report_md={out}/report.md")
+        print(f"report_json={out}/report.json")
+        # Short PR comment: everything above the full findings table.
+        md = open(f"{out}/report.md").read()
+        short = md.split("## All findings")[0]
+        if len(short) > 60000:
+            short = short[:60000] + "\n\n_(truncated)_\n"
+        short += "\n_Full findings are in the job summary._\n<!-- repro-debt-scanner -->\n"
+        open(f"{out}/comment.md", "w").write(short)
+        PY
+
+    - name: Comment on pull request
+      if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        body="${RUNNER_TEMP}/repro-debt/comment.md"
+        gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --body-file "$body" 2>/dev/null \
+          || gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$body" \
+          || echo "::warning::Could not post PR comment (does the workflow have pull-requests: write?)"
+
+    - name: Enforce threshold
+      if: ${{ inputs.fail-above != '' }}
+      shell: bash
+      env:
+        SCORE: ${{ steps.scan.outputs.score }}
+        LIMIT: ${{ inputs.fail-above }}
+      run: |
+        if [ "$SCORE" -gt "$LIMIT" ]; then
+          echo "::error::Reproducibility debt score $SCORE is above the limit of $LIMIT"
+          exit 1
+        fi

@@ -1,12 +1,13 @@
 """Walk a repository and load the files the checks need."""
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from .names import norm_dist
 
@@ -89,7 +90,12 @@ def _read(p: Path, limit: int = MAX_CODE_BYTES) -> Optional[str]:
         return None
 
 
-def load_repo(root: str) -> Repo:
+def _excluded(rel: str, patterns: Sequence[str]) -> bool:
+    return any(fnmatch.fnmatch(rel, p) or rel == p.rstrip("/") or rel.startswith(p.rstrip("/") + "/")
+               for p in patterns)
+
+
+def load_repo(root: str, exclude: Sequence[str] = ()) -> Repo:
     rootp = Path(root).resolve()
     repo = Repo(root=rootp)
     for dirpath, dirnames, filenames in os.walk(rootp):
@@ -99,7 +105,8 @@ def load_repo(root: str) -> Repo:
             repo.local_modules.add(rel_dir.name)
         for fn in sorted(filenames):
             rel = (rel_dir / fn).as_posix()
-            repo.files.append(rel)
+            if not _excluded(rel, exclude):
+                repo.files.append(rel)
     for rel in repo.files:
         _classify(repo, rel)
     repo.python_version_recorded = repo.python_version_recorded or any(d.python_version for d in repo.deps)

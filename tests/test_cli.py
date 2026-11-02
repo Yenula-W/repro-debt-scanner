@@ -35,3 +35,11 @@ def test_score_caps_repeated_findings():
 def test_every_check_has_fix_text():
     for c in CHECKS.values():
         assert c.fix and c.severity in ("high", "medium", "low")
+
+
+def test_exclude(make_repo, capsys):
+    root = make_repo({"vendor/x.py": 'open("/Users/x/a.csv")\n'})
+    main(["scan", str(root), "--format", "json"])
+    assert "PATH001" in capsys.readouterr().out
+    main(["scan", str(root), "--format", "json", "--exclude", "vendor"])
+    assert "PATH001" not in capsys.readouterr().out

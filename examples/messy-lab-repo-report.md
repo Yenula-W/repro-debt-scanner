@@ -1,0 +1,48 @@
+# Reproducibility debt report: `messy-lab-repo`
+
+**Debt score: 79 points — grade F.** Severe debt; results are very unlikely to be reproducible as-is.
+
+3 high, 12 medium, 1 low severity issues · 2 Python files, 1 notebooks, 0 R files · dependency files: requirements.txt
+
+_Lower is better. Each issue type adds points by severity (high 10, medium 4, low 1), counted at most 3 times._
+
+## Top fixes
+
+1. **Input file missing and nothing creates it** (high, 1 found, 10 pts) — Include these input files, or explain in the README where to download them and where to put them: `data/plate_metadata.csv`.
+2. **Notebook uses a name defined in a later cell** (high, 1 found, 10 pts) — Move the cell that defines these names above the cell that uses them, then Restart & Run All: `figures.ipynb:rates`.
+3. **Hardcoded absolute path** (high, 1 found, 10 pts) — Replace absolute paths that only exist on your computer with paths relative to the repository (e.g. `Path(__file__).parent / 'data'`). Found: `/Users/alice/Dropbox/lab/raw_counts.csv`.
+4. **Imported package not declared** (medium, 2 found, 8 pts) — Add the packages your code imports but your dependency file does not list: `matplotlib`, `sklearn`.
+5. **Undocumented intermediate step** (medium, 2 found, 8 pts) — Document the order the scripts must run in (a numbered list in the README, a run_all.sh, or a Makefile/Snakefile). Unclear: `scripts/01_clean.py -> figures.ipynb`, `scripts/01_clean.py -> scripts/02_fit.py`.
+
+## Can each step be re-run?
+
+0 of 3 scripts/notebooks have no detected blockers.
+
+| Step | Status | Likely cause if it breaks | Why |
+|---|---|---|---|
+| `figures.ipynb` | ❌ blocked | data | undeclared package `matplotlib`; hidden-state name `rates`; saved error `FileNotFoundError: clean_counts.csv`; needs output of `scripts/01_clean.py` |
+| `scripts/01_clean.py` | ❌ blocked | data | absolute path `/Users/alice/Dropbox/lab/raw_counts.csv` |
+| `scripts/02_fit.py` | ❌ blocked | data | undeclared package `sklearn`; missing input `data/plate_metadata.csv`; needs output of `scripts/01_clean.py` |
+
+## All findings
+
+| Severity | Check | Where | What |
+|---|---|---|---|
+| high | DATA001 Input file missing and nothing creates it | `scripts/02_fit.py:6` | Reads `data/plate_metadata.csv`, which is not in the repository and no script creates it. |
+| high | NB002 Notebook uses a name defined in a later cell | `figures.ipynb cell 1 line 2` | Cell 1 uses `rates`, which is only defined later in cell 2; this only worked because of hidden kernel state. |
+| high | PATH001 Hardcoded absolute path | `scripts/01_clean.py:3` | Absolute path `/Users/alice/Dropbox/lab/raw_counts.csv` only exists on the author's machine. |
+| medium | DEP002 Dependencies without exact versions | `requirements.txt:1` | 2 of 2 packages in requirements.txt have no exact version: pandas, numpy. |
+| medium | DEP003 Imported package not declared | `figures.ipynb cell 1 line 1` | `matplotlib` is imported but not listed in any dependency file (requirements.txt). |
+| medium | DEP003 Imported package not declared | `scripts/02_fit.py:3` | `sklearn` is imported but not listed in any dependency file (requirements.txt). |
+| medium | DOC002 README lacks run instructions | `README.md` | The README does not show any commands for installing or running the code. |
+| medium | DOC003 No license | `(repository)` | No LICENSE file found; by default nobody may legally reuse this code. |
+| medium | DOC004 No data availability note | `README.md` | The code reads data files but the README does not say where the data comes from or how to get it. |
+| medium | ENV001 Python/R version not recorded | `(repository)` | The Python version used is not recorded anywhere (notebook metadata says 3.9.7, but that is not an installable spec). |
+| medium | NB001 Notebook cells executed out of order | `figures.ipynb cell 2` | Cell 2 (run #3) was executed before cell 1 (run #7) above it; the saved results came from running cells out of order. |
+| medium | NB005 Notebook saved with error outputs | `figures.ipynb cell 3` | Cell 3 was saved showing `FileNotFoundError: clean_counts.csv` (looks like a data problem). |
+| medium | RAND001 Randomness without a fixed seed | `scripts/02_fit.py:7` | Uses randomness (np.random.normal, train_test_split; 2 call(s)) but never sets a seed, so results change on every run. |
+| medium | WF001 Undocumented intermediate step | `figures.ipynb cell 2 line 2` | Reads `clean_counts.csv`, which is created by `scripts/01_clean.py`, but nothing says `scripts/01_clean.py` must run first. |
+| medium | WF001 Undocumented intermediate step | `scripts/02_fit.py:5` | Reads `clean_counts.csv`, which is created by `scripts/01_clean.py`, but nothing says `scripts/01_clean.py` must run first. |
+| low | FIG001 Result figures with no code that produces them | `figures/fig2_supplement.png` | 1 figure/result file(s) have no code in the repo that writes them: figures/fig2_supplement.png. |
+
+<sub>Generated by repro-debt-scanner 0.1.0. Static analysis only: it does not run your code, so treat findings as leads, not verdicts.</sub>

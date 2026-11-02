@@ -377,7 +377,7 @@ def _steps(repo: Repo, facts: List[UnitFacts], findings: List[Finding]) -> List[
                 s.reasons.append(f"hidden-state name `{x.detail.split(':', 1)[-1]}`")
                 cats.append("code")
             elif x.check == "NB005":
-                s.reasons.append(x.message.split(" was saved showing ")[-1])
+                s.reasons.append("saved error " + x.message.split(" was saved showing ")[-1].split(" (looks like")[0])
                 error_cls = error_cls or x.category
                 cats.append(x.category)
             elif x.check == "WF001":

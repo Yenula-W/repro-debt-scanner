@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import OrderedDict
 from typing import Dict, List
 
@@ -141,13 +142,15 @@ def to_markdown(report: Dict, max_findings: int = 200) -> str:
     return "\n".join(L) + "\n"
 
 
-def to_github_annotations(report: Dict) -> str:
+def to_github_annotations(report: Dict, prefix: str = "") -> str:
+    prefix = prefix.strip().rstrip("/")
+    prefix = "" if prefix in ("", ".") else re.sub(r"^(\./)+", "", prefix) + "/"
     out = []
     for f in report["findings"]:
         level = {"high": "error", "medium": "warning", "low": "notice"}[f["severity"]]
         props = []
         if f["file"]:
-            props.append(f"file={f['file']}")
+            props.append(f"file={prefix}{f['file']}")
             if f["line"] and f["cell"] is None:
                 props.append(f"line={f['line']}")
         props.append(f"title={f['check']} {f['title']}")

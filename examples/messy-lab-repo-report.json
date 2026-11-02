@@ -1,0 +1,313 @@
+{
+  "tool": "repro-debt-scanner",
+  "version": "0.1.0",
+  "target": "messy-lab-repo",
+  "score": {
+    "debt": 79,
+    "grade": "F",
+    "summary": "Severe debt; results are very unlikely to be reproducible as-is.",
+    "by_check": {
+      "DATA001": 10,
+      "NB002": 10,
+      "PATH001": 10,
+      "DEP002": 4,
+      "DEP003": 8,
+      "DOC002": 4,
+      "DOC003": 4,
+      "DOC004": 4,
+      "ENV001": 4,
+      "NB001": 4,
+      "NB005": 4,
+      "RAND001": 4,
+      "WF001": 8,
+      "FIG001": 1
+    }
+  },
+  "top_fixes": [
+    {
+      "check": "DATA001",
+      "title": "Input file missing and nothing creates it",
+      "severity": "high",
+      "count": 1,
+      "points": 10,
+      "fix": "Include these input files, or explain in the README where to download them and where to put them: `data/plate_metadata.csv`."
+    },
+    {
+      "check": "NB002",
+      "title": "Notebook uses a name defined in a later cell",
+      "severity": "high",
+      "count": 1,
+      "points": 10,
+      "fix": "Move the cell that defines these names above the cell that uses them, then Restart & Run All: `figures.ipynb:rates`."
+    },
+    {
+      "check": "PATH001",
+      "title": "Hardcoded absolute path",
+      "severity": "high",
+      "count": 1,
+      "points": 10,
+      "fix": "Replace absolute paths that only exist on your computer with paths relative to the repository (e.g. `Path(__file__).parent / 'data'`). Found: `/Users/alice/Dropbox/lab/raw_counts.csv`."
+    },
+    {
+      "check": "DEP003",
+      "title": "Imported package not declared",
+      "severity": "medium",
+      "count": 2,
+      "points": 8,
+      "fix": "Add the packages your code imports but your dependency file does not list: `matplotlib`, `sklearn`."
+    },
+    {
+      "check": "WF001",
+      "title": "Undocumented intermediate step",
+      "severity": "medium",
+      "count": 2,
+      "points": 8,
+      "fix": "Document the order the scripts must run in (a numbered list in the README, a run_all.sh, or a Makefile/Snakefile). Unclear: `scripts/01_clean.py -> figures.ipynb`, `scripts/01_clean.py -> scripts/02_fit.py`."
+    }
+  ],
+  "counts": {
+    "high": 3,
+    "medium": 12,
+    "low": 1
+  },
+  "stats": {
+    "python_files": 2,
+    "notebooks": 1,
+    "r_files": 0,
+    "dependency_files": [
+      "requirements.txt"
+    ],
+    "steps": 3,
+    "steps_runnable": 0
+  },
+  "steps": [
+    {
+      "file": "figures.ipynb",
+      "status": "blocked",
+      "likely_break": "data",
+      "reasons": [
+        "undeclared package `matplotlib`",
+        "hidden-state name `rates`",
+        "saved error `FileNotFoundError: clean_counts.csv`"
+      ],
+      "upstream": [
+        "scripts/01_clean.py"
+      ]
+    },
+    {
+      "file": "scripts/01_clean.py",
+      "status": "blocked",
+      "likely_break": "data",
+      "reasons": [
+        "absolute path `/Users/alice/Dropbox/lab/raw_counts.csv`"
+      ],
+      "upstream": []
+    },
+    {
+      "file": "scripts/02_fit.py",
+      "status": "blocked",
+      "likely_break": "data",
+      "reasons": [
+        "undeclared package `sklearn`",
+        "missing input `data/plate_metadata.csv`"
+      ],
+      "upstream": [
+        "scripts/01_clean.py"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "check": "DATA001",
+      "message": "Reads `data/plate_metadata.csv`, which is not in the repository and no script creates it.",
+      "file": "scripts/02_fit.py",
+      "line": 6,
+      "cell": null,
+      "detail": "data/plate_metadata.csv",
+      "severity": "high",
+      "category": "data",
+      "title": "Input file missing and nothing creates it",
+      "location": "scripts/02_fit.py:6"
+    },
+    {
+      "check": "NB002",
+      "message": "Cell 1 uses `rates`, which is only defined later in cell 2; this only worked because of hidden kernel state.",
+      "file": "figures.ipynb",
+      "line": 2,
+      "cell": 1,
+      "detail": "figures.ipynb:rates",
+      "severity": "high",
+      "category": "code",
+      "title": "Notebook uses a name defined in a later cell",
+      "location": "figures.ipynb cell 1 line 2"
+    },
+    {
+      "check": "PATH001",
+      "message": "Absolute path `/Users/alice/Dropbox/lab/raw_counts.csv` only exists on the author's machine.",
+      "file": "scripts/01_clean.py",
+      "line": 3,
+      "cell": null,
+      "detail": "/Users/alice/Dropbox/lab/raw_counts.csv",
+      "severity": "high",
+      "category": "data",
+      "title": "Hardcoded absolute path",
+      "location": "scripts/01_clean.py:3"
+    },
+    {
+      "check": "DEP002",
+      "message": "2 of 2 packages in requirements.txt have no exact version: pandas, numpy.",
+      "file": "requirements.txt",
+      "line": 1,
+      "cell": null,
+      "detail": "requirements.txt",
+      "severity": "medium",
+      "category": "dependency",
+      "title": "Dependencies without exact versions",
+      "location": "requirements.txt:1"
+    },
+    {
+      "check": "DEP003",
+      "message": "`matplotlib` is imported but not listed in any dependency file (requirements.txt).",
+      "file": "figures.ipynb",
+      "line": 1,
+      "cell": 1,
+      "detail": "matplotlib",
+      "severity": "medium",
+      "category": "dependency",
+      "title": "Imported package not declared",
+      "location": "figures.ipynb cell 1 line 1"
+    },
+    {
+      "check": "DEP003",
+      "message": "`sklearn` is imported but not listed in any dependency file (requirements.txt).",
+      "file": "scripts/02_fit.py",
+      "line": 3,
+      "cell": null,
+      "detail": "sklearn",
+      "severity": "medium",
+      "category": "dependency",
+      "title": "Imported package not declared",
+      "location": "scripts/02_fit.py:3"
+    },
+    {
+      "check": "DOC002",
+      "message": "The README does not show any commands for installing or running the code.",
+      "file": "README.md",
+      "line": null,
+      "cell": null,
+      "detail": null,
+      "severity": "medium",
+      "category": "docs",
+      "title": "README lacks run instructions",
+      "location": "README.md"
+    },
+    {
+      "check": "DOC003",
+      "message": "No LICENSE file found; by default nobody may legally reuse this code.",
+      "file": null,
+      "line": null,
+      "cell": null,
+      "detail": null,
+      "severity": "medium",
+      "category": "docs",
+      "title": "No license",
+      "location": "(repository)"
+    },
+    {
+      "check": "DOC004",
+      "message": "The code reads data files but the README does not say where the data comes from or how to get it.",
+      "file": "README.md",
+      "line": null,
+      "cell": null,
+      "detail": null,
+      "severity": "medium",
+      "category": "docs",
+      "title": "No data availability note",
+      "location": "README.md"
+    },
+    {
+      "check": "ENV001",
+      "message": "The Python version used is not recorded anywhere (notebook metadata says 3.9.7, but that is not an installable spec).",
+      "file": null,
+      "line": null,
+      "cell": null,
+      "detail": null,
+      "severity": "medium",
+      "category": "environment",
+      "title": "Python/R version not recorded",
+      "location": "(repository)"
+    },
+    {
+      "check": "NB001",
+      "message": "Cell 2 (run #3) was executed before cell 1 (run #7) above it; the saved results came from running cells out of order.",
+      "file": "figures.ipynb",
+      "line": null,
+      "cell": 2,
+      "detail": "figures.ipynb",
+      "severity": "medium",
+      "category": "code",
+      "title": "Notebook cells executed out of order",
+      "location": "figures.ipynb cell 2"
+    },
+    {
+      "check": "NB005",
+      "message": "Cell 3 was saved showing `FileNotFoundError: clean_counts.csv` (looks like a data problem).",
+      "file": "figures.ipynb",
+      "line": null,
+      "cell": 3,
+      "detail": "figures.ipynb (FileNotFoundError)",
+      "severity": "medium",
+      "category": "data",
+      "title": "Notebook saved with error outputs",
+      "location": "figures.ipynb cell 3"
+    },
+    {
+      "check": "RAND001",
+      "message": "Uses randomness (np.random.normal, train_test_split; 2 call(s)) but never sets a seed, so results change on every run.",
+      "file": "scripts/02_fit.py",
+      "line": 7,
+      "cell": null,
+      "detail": "scripts/02_fit.py",
+      "severity": "medium",
+      "category": "code",
+      "title": "Randomness without a fixed seed",
+      "location": "scripts/02_fit.py:7"
+    },
+    {
+      "check": "WF001",
+      "message": "Reads `clean_counts.csv`, which is created by `scripts/01_clean.py`, but nothing says `scripts/01_clean.py` must run first.",
+      "file": "figures.ipynb",
+      "line": 2,
+      "cell": 2,
+      "detail": "scripts/01_clean.py -> figures.ipynb",
+      "severity": "medium",
+      "category": "workflow",
+      "title": "Undocumented intermediate step",
+      "location": "figures.ipynb cell 2 line 2"
+    },
+    {
+      "check": "WF001",
+      "message": "Reads `clean_counts.csv`, which is created by `scripts/01_clean.py`, but nothing says `scripts/01_clean.py` must run first.",
+      "file": "scripts/02_fit.py",
+      "line": 5,
+      "cell": null,
+      "detail": "scripts/01_clean.py -> scripts/02_fit.py",
+      "severity": "medium",
+      "category": "workflow",
+      "title": "Undocumented intermediate step",
+      "location": "scripts/02_fit.py:5"
+    },
+    {
+      "check": "FIG001",
+      "message": "1 figure/result file(s) have no code in the repo that writes them: figures/fig2_supplement.png.",
+      "file": "figures/fig2_supplement.png",
+      "line": null,
+      "cell": null,
+      "detail": "figures/fig2_supplement.png",
+      "severity": "low",
+      "category": "workflow",
+      "title": "Result figures with no code that produces them",
+      "location": "figures/fig2_supplement.png"
+    }
+  ]
+}
