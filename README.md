@@ -21,7 +21,7 @@ first and whether a step is runnable at all.
 ## Install
 
 ```bash
-pip install git+https://github.com/<owner>/repro-debt-scanner   # or, from a checkout:
+pip install git+https://github.com/Yenula-W/repro-debt-scanner   # or, from a checkout:
 pip install .
 ```
 
@@ -136,7 +136,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: <owner>/repro-debt-scanner@main
+      - uses: Yenula-W/repro-debt-scanner@main
         with:
           path: .            # directory to scan
           exclude: ""        # e.g. "tests vendor/*"
