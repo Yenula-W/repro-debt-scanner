@@ -83,6 +83,26 @@ class UnitFacts:
 _MAGIC_OK = {"%%time", "%%timeit", "%%capture", "%%prun"}
 
 
+HELP_LINE = re.compile(r"^\?{1,2}[\w.]+$|^[\w.\[\]()]+\?{1,2}$")  # `obj?`, `obj??`, `?obj`
+REGEX_DEFS = [
+    re.compile(r"^\s*([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s*(?::[^=]+)?=(?!=)", re.M),
+    re.compile(r"^\s*(?:async\s+)?(?:def|class)\s+([A-Za-z_]\w*)", re.M),
+    re.compile(r"^\s*for\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+in\b", re.M),
+    re.compile(r"\bas\s+([A-Za-z_]\w*)"),
+    re.compile(r"^\s*import\s+([A-Za-z_]\w*)", re.M),
+    re.compile(r"^\s*from\s+\S+\s+import\s+\(?([\w\s,]+)\)?\s*$", re.M),
+]
+
+
+def regex_defs(src: str) -> Set[str]:
+    """Names a cell defines, for cells the running Python cannot parse (e.g. 3.12 f-strings on 3.9)."""
+    out: Set[str] = set()
+    for rx in REGEX_DEFS:
+        for m in rx.finditer(src):
+            out.update(n.strip() for n in m.group(1).split(",") if n.strip().isidentifier())
+    return out
+
+
 def clean_cell_source(src: str) -> Optional[str]:
     """Turn IPython cell source into parseable Python, keeping line numbers. None = not Python."""
     lines = src.splitlines()
@@ -93,7 +113,8 @@ def clean_cell_source(src: str) -> Optional[str]:
     out = []
     for ln in lines:
         s = ln.lstrip()
-        if s.startswith(("%", "!")) or (s.endswith("?") and not s.startswith("#")):
+        code = re.sub(r"\s+#.*$", "", s)  # a `?` inside a trailing comment is not IPython help
+        if s.startswith(("%", "!")) or HELP_LINE.match(code):
             indent = ln[: len(ln) - len(s)]
             out.append(indent + "pass")
         else:
@@ -259,6 +280,8 @@ def analyze_python(unit: CodeUnit) -> UnitFacts:
             tree = ast.parse(src)
         except (SyntaxError, ValueError):
             facts.syntax_errors.append(Ref("", cell.index, 1))
+            if unit.is_notebook:  # still record what it defines, so later cells are not misjudged
+                facts.cell_flow.append((cell.index or 0, regex_defs(src), [], False))
             continue
         _scan_tree(tree, cell, facts, resolver)
         if unit.is_notebook:
@@ -390,6 +413,8 @@ def _scan_call(node: ast.Call, cell: Cell, facts: UnitFacts, resolver: _Resolver
         target = facts.writes if any(c in mode for c in "wax") else facts.reads
         target.append(Ref(path, cell.index, line))
         return
+    if name in ("read_text", "read_bytes") and node.args:
+        return  # Path.read_text() takes no path; with an argument it is importlib.metadata/resources
     if name in READERS and name not in ("open", "File"):
         if name == "load" and root not in ("np", "numpy", "torch", "joblib", "nib", "nibabel", "sio", "scipy",
                                             "librosa", "mne", "json", "pickle", "yaml", "dill", "h5py", "loadmat"):

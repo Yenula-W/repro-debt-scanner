@@ -156,7 +156,7 @@ def _classify(repo: Repo, rel: str) -> None:
         repo.deps.append(_parse_requirements(rel, _read(p) or ""))
     elif re.match(r"(environment|env|conda).*\.ya?ml$", lower) and depth <= 2:
         repo.deps.append(_parse_env_yml(rel, _read(p) or ""))
-    elif re.search(r"\.ya?ml$", lower) and depth <= 1 and _is_conda_env(_read(p) or ""):
+    elif re.search(r"\.ya?ml$", lower) and depth <= 3 and _is_conda_env(_read(p) or ""):
         repo.deps.append(_parse_env_yml(rel, _read(p) or ""))  # e.g. requirements.yml
     elif name == "pyproject.toml":
         _parse_pyproject(repo, rel, _read(p) or "")
@@ -257,7 +257,8 @@ def _parse_notebook_installs(repo: Repo, unit: CodeUnit) -> None:
         for line in cell.source.splitlines():
             m = re.match(r"^\s*[!%]\s*(?:python3?\s+-m\s+)?pip\s+install\s+(.+)$", line)
             if m:
-                reqs += [t.strip("'\"") for t in m.group(1).split() if not t.startswith("-")]
+                reqs += [t.strip("'\"") for t in m.group(1).split()
+                         if not t.startswith(("-", ".", "/", "git+")) and "://" not in t and "$" not in t]
     if reqs:
         d = DepSpec(unit.path)
         _add_reqs(d, reqs, 1)

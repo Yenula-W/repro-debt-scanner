@@ -36,6 +36,11 @@ ERROR_CLASS = {
     "ParserError": "data", "PermissionError": "data", "HTTPError": "data", "URLError": "data",
     "KeyError": "data",
 }
+TEST_FILE = re.compile(r"/(tests?|testthat)/|/test_[^/]*$|_test\.(py|R)$", re.I)
+# package docs, test snapshots and illustrations are not results
+NOT_RESULT_FIG = re.compile(r"/(man|tests?|docs?|pkgdown|vignettes|\.github|assets?|static)/|"
+                            r"(logo|banner|icon|hex|sticker|framework|overview|concept|schematic|diagram|"
+                            r"workflow|pipeline|graphical.?abstract|screenshot|architecture)[^/]*$", re.I)
 FIG_WRITE_HINT = re.compile(r"savefig|imwrite|imsave|write_image|ggsave|png\(|pdf\(")
 
 
@@ -53,7 +58,7 @@ def run_checks(repo: Repo) -> ScanResult:
     f = res.findings
     _deps(repo, res.facts, f)
     _paths_and_data(repo, res.facts, f)
-    _randomness(res.facts, f)
+    _randomness(repo, res.facts, f)
     _notebooks(res.facts, f)
     _figures(repo, res.facts, f)
     _docs(repo, res.facts, f)
@@ -111,6 +116,9 @@ def _deps(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
                                  f"({', '.join(d.file for d in repo.deps[:3])}).", path, line, cell, detail=mod))
         if not repo.has_lock:
             for d in repo.deps:
+                # R packages state minimum versions in DESCRIPTION by convention; docs/ deps don't affect results
+                if posixpath.basename(d.file) == "DESCRIPTION" or d.file.startswith(("docs/", "doc/")):
+                    continue
                 if d.unpinned:
                     names = list(OrderedDict.fromkeys(n for n, _ in d.unpinned))
                     shown = ", ".join(names[:6]) + (f" (+{len(names) - 6} more)" if len(names) > 6 else "")
@@ -276,8 +284,14 @@ def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> Non
 
 # ------------------------------------------------------------------ randomness
 
-def _randomness(facts: List[UnitFacts], f: List[Finding]) -> None:
+def _randomness(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
+    files = set(repo.files)
     for fa in facts:
+        path = fa.unit.path
+        in_package = posixpath.join(posixpath.dirname(path), "__init__.py") in files
+        main_guard = "__main__" in "".join(c.source for c in fa.unit.cells)
+        if TEST_FILE.search("/" + path) or (fa.unit.lang == "python" and in_package and not main_guard):
+            continue  # seeds belong in the scripts/notebooks that run, not in tests or importable library code
         if fa.random_uses and not fa.has_seed:
             first = fa.random_uses[0]
             kinds = sorted({r.path.split("(")[0] for r in fa.random_uses})[:4]
@@ -345,11 +359,14 @@ def _notebooks(facts: List[UnitFacts], f: List[Finding]) -> None:
         for c in code:
             for o in c.outputs:
                 if isinstance(o, dict) and o.get("output_type") == "error":
-                    ename = o.get("ename") or "Error"
+                    ename = str(o.get("ename") or "Error")
                     cls = ERROR_CLASS.get(ename, "code")
-                    f.append(Finding("NB005", f"Cell {c.index} was saved showing `{ename}: "
-                                     f"{str(o.get('evalue', ''))[:80]}` (looks like a {cls} problem).",
-                                     u.path, None, c.index, detail=f"{u.path} ({ename})", category=cls))
+                    if ename == "KeyboardInterrupt":
+                        msg = f"Cell {c.index} was saved after being interrupted, so its saved output is incomplete."
+                    else:
+                        msg = (f"Cell {c.index} was saved showing `{ename}: {str(o.get('evalue', ''))[:80]}` "
+                               f"(looks like a {cls} problem).")
+                    f.append(Finding("NB005", msg, u.path, None, c.index, detail=f"{u.path} ({ename})", category=cls))
                     break
 
         # non-linear outputs
@@ -374,7 +391,8 @@ def _notebooks(facts: List[UnitFacts], f: List[Finding]) -> None:
 # ------------------------------------------------------------------ figures
 
 def _figures(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
-    figs = [p for p in repo.files if FIG_EXT.search(p) and FIG_DIR.search("/" + p)]
+    figs = [p for p in repo.files if FIG_EXT.search(p) and FIG_DIR.search("/" + p)
+            and not NOT_RESULT_FIG.search("/" + p)]
     if not figs:
         return
     if any(fa.unresolved_writes for fa in facts):
@@ -399,7 +417,7 @@ def _docs(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
                          repo.readme_path))
     if not repo.license_found:
         f.append(Finding("DOC003", "No LICENSE file found; by default nobody may legally reuse this code."))
-    reads_data = any(fa.reads for fa in facts)
+    reads_data = any(x.check == "DATA001" for x in f)  # only matters when some input is not in the repo
     has_data_readme = any(re.match(r"data/readme", p, re.I) for p in repo.files)
     if reads_data and not has_data_readme and not DATA_NOTE.search(repo.readme):
         f.append(Finding("DOC004", "The code reads data files but the README does not say where the data comes "

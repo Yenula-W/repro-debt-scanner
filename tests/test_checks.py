@@ -274,9 +274,14 @@ def test_relative_path_matching_other_working_dir(scan):
 
 
 def test_dep002_counts_unique_packages(scan):
-    r = scan({"requirements.txt": None, "DESCRIPTION": "Package: p\nImports: dplyr\nSuggests: dplyr, knitr\n",
-              "a.R": "library(dplyr)\n"})
+    r = scan({"requirements.txt": "dplyr\nknitr\ndplyr\n", "run.py": "import os\n"})
     assert "2 of 2 packages" in checks_of(r, "DEP002")[0].message
+
+
+def test_dep002_skips_r_description_minimum_versions(scan):
+    r = scan({"requirements.txt": None, "DESCRIPTION": "Package: p\nImports: dplyr\nSuggests: knitr\n",
+              "a.R": "library(dplyr)\n"})
+    assert checks_of(r, "DEP002") == []
 
 
 # ---------------------------------------------------------------- false alarms found on real paper repos
@@ -334,3 +339,57 @@ def test_dep001_colab_pip_install_counts_as_declared(scan):
               "colab.ipynb": notebook([("!pip install biopython==1.83 pandas", 1), ("import Bio\nimport pandas", 2)])})
     assert checks_of(r, "DEP001") == [] and checks_of(r, "DEP003") == []
     assert any("pandas" in f.message for f in checks_of(r, "DEP002"))
+
+
+def test_rand001_skips_library_modules_and_tests(scan):
+    r = scan({"pkg/__init__.py": "", "pkg/aug.py": "import random\ndef jitter(x):\n    return x + random.random()\n",
+              "tests/test_aug.py": "import random\nrandom.random()\n",
+              "requirements.txt": "numpy==1.26.4\n"})
+    assert checks_of(r, "RAND001") == []
+
+
+def test_nb003_question_mark_in_comment_is_not_ipython_help(scan):
+    r = scan({"nb.ipynb": notebook([("fold=1 # which fold to look at?\nprint(fold)", 1)])})
+    assert checks_of(r, "NB003") == []
+
+
+def test_nb_unparseable_cell_still_defines_names(scan):
+    # a cell this Python can't parse (here: a stray bracket) must not make later cells look undefined
+    r = scan({"nb.ipynb": notebook([("sched = make()\nx = f'{sched[\"a\"}'", 1), ("print(sched)", 2)])})
+    assert checks_of(r, "NB003") == [] and checks_of(r, "NB002") == []
+
+
+def test_data001_ignores_importlib_metadata_read_text(scan):
+    r = scan({"run.py": "from importlib import metadata\nmetadata.distribution('x').read_text('direct_url.json')\n"})
+    assert checks_of(r, "DATA001") == []
+
+
+def test_nb005_keyboard_interrupt_is_not_called_a_code_problem(scan):
+    err = [{"output_type": "error", "ename": "KeyboardInterrupt", "evalue": "", "traceback": []}]
+    r = scan({"nb.ipynb": notebook([("import time\ntime.sleep(9)", 1, err)])})
+    f = checks_of(r, "NB005")
+    assert len(f) == 1 and "interrupted" in f[0].message and "code problem" not in f[0].message
+
+
+def test_fig001_ignores_logos_and_package_docs(scan):
+    r = scan({"figures/logo.png": "x", "man/figures/plot.png": "x", "figures/fig2.png": "x"})
+    f = checks_of(r, "FIG001")
+    assert len(f) == 1 and "fig2.png" in f[0].message and "logo" not in f[0].message
+
+
+def test_doc004_only_when_inputs_are_missing(scan):
+    readme = "# x\n```\npython run.py\n```\n"
+    present = scan({"README.md": readme, "data/a.csv": "1\n", "run.py": "open('data/a.csv')\n"})
+    missing = scan({"README.md": readme, "run.py": "open('data/b.csv')\n"})
+    assert checks_of(present, "DOC004") == [] and len(checks_of(missing, "DOC004")) == 1
+
+
+def test_snakemake_env_files_count_as_dependencies(scan):
+    r = scan({"requirements.txt": None, "workflow/envs/general.yaml": "channels:\n  - conda-forge\ndependencies:\n  - scipy=1.11\n",
+              "workflow/scripts/a.py": "import scipy\n"})
+    assert checks_of(r, "DEP001") == [] and checks_of(r, "DEP003") == []
+
+
+def test_pip_install_from_git_url_is_not_a_package_name(scan):
+    r = scan({"requirements.txt": None, "nb.ipynb": notebook([("!pip install git+https://github.com/a/b.git pyfaidx==0.8", 1)])})
+    assert all("git" not in f.message for f in checks_of(r, "DEP002"))
