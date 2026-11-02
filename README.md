@@ -11,7 +11,7 @@ English and ends with a **top 5 fixes** list a researcher can act on in an after
 
 - Static analysis only. It never runs or imports your code, so it is safe on untrusted repos and takes
   under a second on typical paper repos.
-- No dependencies. Pure Python 3.8+ standard library.
+- No dependencies. Pure Python 3.10+ standard library.
 - Markdown for humans, JSON for tools, GitHub annotations for CI.
 
 How it differs from existing tools: ReproZip and repo2docker/Binder *capture or rebuild* an environment;
@@ -163,4 +163,4 @@ pip install -e ".[test]"
 pytest
 ```
 
-`.github/workflows/ci.yml` runs the tests on Python 3.8 and 3.12 and self-tests the Action.
+`.github/workflows/ci.yml` runs the tests on Python 3.10 and 3.12 and self-tests the Action.
