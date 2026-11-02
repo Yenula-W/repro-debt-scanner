@@ -7,7 +7,7 @@ name = "repro-debt-scanner"
 version = "0.1.0"
 description = "Scan a research code repository and get a scored, prioritized reproducibility report."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 dependencies = []
 
