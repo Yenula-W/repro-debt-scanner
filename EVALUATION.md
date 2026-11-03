@@ -120,9 +120,9 @@ The cap was 3 rounds.
 
 | Round | Code under test | Repos | Crashes | Runtime (median / max) | Sample | Wrong | Debatable | Precision | Passed? |
 |---|---|---|---|---|---|---|---|---|---|
-| A | `f0f281c` | 25 | 0 | 0.3 s / 10.6 s | 69 | 19 | 7 | **72.5%** | no |
-| B | `47930c6` | 25 | 0 | 0.2 s / 0.6 s | 67 | 7 | 5 | **89.6%** | no |
-| C | `0c47c8d` | 25 | 0 | 0.2 s / 9.7 s | 68 | 14 | 8 | **79.4%** | no |
+| A | `44f9aaa` | 25 | 0 | 0.3 s / 10.6 s | 69 | 19 | 7 | **72.5%** | no |
+| B | `adda72a` | 25 | 0 | 0.2 s / 0.6 s | 67 | 7 | 5 | **89.6%** | no |
+| C | `ae3f696` | 25 | 0 | 0.2 s / 9.7 s | 68 | 14 | 8 | **79.4%** | no |
 
 Per-check precision, untouched, as correct plus debatable out of the sample:
 
@@ -201,7 +201,7 @@ venvs. Every README usage line was run verbatim against a copy of `examples/mess
 
 | Python | pip | Install | README usage |
 |---|---|---|---|
-| 3.9.7 (macOS framework) | 21.2.3 | 8 s | all 8 lines OK (re-checked on `6bf5b7b`, 108 tests passing on each): 15 findings (5 needs review), grade D from the 10 confident ones; 10 with `--confident-only`; `--fail-above 25` exits 1 |
+| 3.9.7 (macOS framework) | 21.2.3 | 8 s | all 8 lines OK (re-checked on `10c7394`, 108 tests passing on each): 15 findings (5 needs review), grade D from the 10 confident ones; 10 with `--confident-only`; `--fail-above 25` exits 1 |
 | 3.12.15 | 25.0.1 | 4 s | identical |
 | 3.13.16 | 26.2.1 | 5 s | identical |
 
