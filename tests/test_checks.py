@@ -647,7 +647,8 @@ def test_nb002_honours_globals_guard(scan):
 
 def test_env001_accepts_version_stated_in_readme(scan):
     for text in ("Tested with **Python 3.12**.", "Requires python>=3.9", "Use Python version 3.10.",
-                 "conda create -n x python=3.11", "Built on R 4.3.1", "Needs R (>= 4.1)"):
+                 "conda create -n x python=3.11", "Built on R 4.3.1", "Needs R (>= 4.1)",
+                 "- **R version**: 4.4.2 (2024-10-31 ucrt)", "- __Python version__: 3.11", "Uses `python==3.10`"):
         r = scan({".python-version": None, "README.md": f"# x\n```\npython run.py\n```\n{text}\n",
                   "run.py": "import numpy\n"})
         assert checks_of(r, "ENV001") == [], text
