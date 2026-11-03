@@ -446,3 +446,9 @@ def test_path_open_mode_is_not_a_file(scan):
 def test_marimo_exports_are_skipped(scan):
     r = scan({"__marimo__/t.ipynb": notebook([("print(x)", 1), ("x = 1", 2)])})
     assert checks_of(r, "NB002") == []
+
+
+def test_readme_rmd_install_commands_are_not_dependencies(scan):
+    r = scan({"DESCRIPTION": "Package: p\nImports: dplyr\n", "README.Rmd": "```{r}\nremotes::install_github('a/b')\n```\n",
+              "R/a.R": "library(dplyr)\n"})
+    assert checks_of(r, "DEP003") == []

@@ -82,6 +82,8 @@ def _third_party_imports(repo: Repo, facts: List[UnitFacts]) -> "OrderedDict[Tup
     local = _local_names(repo)
     out: "OrderedDict[Tuple[str, str], Tuple[str, Optional[int], int]]" = OrderedDict()
     for fa in facts:
+        if re.match(r"readme\.", posixpath.basename(fa.unit.path), re.I):
+            continue  # README.Rmd shows install commands (remotes::install_github), not dependencies
         for ref in fa.imports:
             mod = ref.path
             if fa.unit.lang == "python":
