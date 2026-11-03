@@ -173,6 +173,10 @@ def _classify(repo: Repo, rel: str) -> None:
         _parse_dockerfile(repo, rel, _read(p) or "")
     elif name in (".python-version", "runtime.txt"):
         repo.python_version_recorded = True
+    elif rel.startswith(".github/workflows/") and lower.endswith((".yml", ".yaml")):
+        # CI that installs a specific Python/R version records which version the code runs on
+        if re.search(r"""(^|[{,])\s*(python|r)-version\s*:\s*['"\[]?\s*['"]?[0-9]""", _read(p) or "", re.M | re.I):
+            repo.python_version_recorded = True
 
 
 def _rmd_to_r(src: str) -> str:
@@ -283,6 +287,8 @@ def _parse_env_yml(rel: str, text: str) -> DepSpec:
         if not m:
             continue
         item = (m.group(1) + " " + m.group(2)).split("#")[0].strip()
+        if item.startswith("-"):  # pip options such as `- --extra-index-url URL`
+            continue
         if item.endswith(":"):  # "- pip:"
             continue
         name = re.split(r"[=<>!~ ]", item, 1)[0]
@@ -322,18 +328,56 @@ def _line_of(text: str, idx: int) -> int:
     return text.count("\n", 0, idx) + 1
 
 
+def _toml_array(text: str, start: int) -> str:
+    """Body of the TOML array whose `[` is at text[start], honouring quotes (so `pkg[extra]` is safe)."""
+    depth, i, quote = 0, start, None
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            if ch == "\\":
+                i += 1
+            elif ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#":
+            nl = text.find("\n", i)
+            i = len(text) if nl < 0 else nl
+            continue
+        elif ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                return text[start + 1:i]
+        i += 1
+    return text[start + 1:]
+
+
 def _parse_pyproject(repo: Repo, rel: str, text: str) -> None:
     d = DepSpec(rel)
     if re.search(r"^\s*(requires-python|python)\s*=", text, re.M):
         d.python_version = True
-    m = re.search(r"^\s*dependencies\s*=\s*\[(.*?)\]", text, re.S | re.M)
+    m = re.search(r"^\s*dependencies\s*=\s*\[", text, re.M)
     if m:
-        _add_reqs(d, _quoted_reqs(m.group(1)), _line_of(text, m.start()))
-    for m in re.finditer(r"^\[project\.optional-dependencies\](.*?)(?=^\[|\Z)", text, re.S | re.M):
-        for r in _quoted_reqs(m.group(1)):
+        _add_reqs(d, _quoted_reqs(_toml_array(text, m.end() - 1)), _line_of(text, m.start()))
+    # optional extras, PEP 735 dependency groups and uv dev-dependencies declare packages too (not pinned)
+    for m in re.finditer(r"^\[(project\.optional-dependencies|dependency-groups)\](.*?)(?=^\[|\Z)",
+                         text, re.S | re.M):
+        for r in _quoted_reqs(m.group(2)):
             rm = REQ_LINE.match(r)
             if rm:
                 d.names.setdefault(norm_dist(rm.group(1)), _line_of(text, m.start()))
+    m = re.search(r"^\s*dev-dependencies\s*=\s*\[", text, re.M)
+    if m:
+        for r in _quoted_reqs(_toml_array(text, m.end() - 1)):
+            rm = REQ_LINE.match(r)
+            if rm:
+                d.names.setdefault(norm_dist(rm.group(1)), _line_of(text, m.start()))
+    for m in re.finditer(r"^\[tool\.poetry\.(?:group\.[^.\]]+\.)?dev-dependencies\](.*?)(?=^\[|\Z)|"
+                         r"^\[tool\.poetry\.group\.[^.\]]+\.dependencies\](.*?)(?=^\[|\Z)", text, re.S | re.M):
+        for lm in re.finditer(r"^\s*([A-Za-z0-9_.\-]+)\s*=", m.group(1) or m.group(2) or "", re.M):
+            d.names.setdefault(norm_dist(lm.group(1)), _line_of(text, m.start()))
     m = re.search(r"^\[tool\.poetry\.dependencies\](.*?)(?=^\[|\Z)", text, re.S | re.M)
     if m:
         for lm in re.finditer(r"^\s*([A-Za-z0-9_.\-]+)\s*=\s*(.+)$", m.group(1), re.M):

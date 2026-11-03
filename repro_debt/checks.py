@@ -36,6 +36,11 @@ ERROR_CLASS = {
     "ParserError": "data", "PermissionError": "data", "HTTPError": "data", "URLError": "data",
     "KeyError": "data",
 }
+DATA_ERROR = re.compile(r"No such file|does not exist|not found|cannot open|could not open|Errno 2|"
+                        r"DataSourceError|DriverError|RasterioIOError|OpenFailed", re.I)
+DELIBERATE_ERROR = re.compile(r"\b(will|should|would|is going to|expected to)\s+(fail|raise|error|throw)|"
+                              r"\braises?\s+an?\s+(error|exception)|\bexpected\s+(error|failure|exception)|"
+                              r"\bthis\s+(fails|errors|raises)|\bfails?\s+(on purpose|intentionally)", re.I)
 TEST_FILE = re.compile(r"/(tests?|testthat)/|/test_[^/]*$|_test\.(py|R)$", re.I)
 # package docs, test snapshots and illustrations are not results
 NOT_RESULT_FIG = re.compile(r"/(man|tests?|docs?|pkgdown|vignettes|\.github|assets?|static)/|"
@@ -231,10 +236,34 @@ def _exists(repo: Repo, cands: List[str]) -> bool:
     return False
 
 
+def _tail(p: str) -> str:
+    return re.sub(r"^(\.\./)+", "", p).rstrip("/")
+
+
+def _producer(produced: Dict[str, str], cands: List[str]) -> Optional[str]:
+    """Script writing a path that matches a read, comparing whole trailing path segments.
+
+    `out/clean.csv` matches a write of `clean.csv` or `../out/clean.csv`, but `a/data.csv` does not match a
+    write of `b/data.csv` (same file name in another folder).
+    """
+    for c in cands:
+        t = _tail(c)
+        if t in produced:
+            return produced[t]
+    for c in cands:
+        t = _tail(c)
+        for w, prod in produced.items():
+            if ("/" not in w or "/" not in t) and (w.endswith("/" + t) or t.endswith("/" + w)):
+                return prod
+    return None
+
+
 def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
     seen_abs: Set[Tuple[str, str]] = set()
     for fa in facts:
         for ref in fa.abs_paths:
+            if TEST_FILE.search("/" + fa.unit.path):
+                continue  # tests use made-up absolute paths to exercise path handling
             if re.match(r"^~/[^/]+/?$", ref.path):
                 continue  # `~/some_output` is created on any machine; only deeper home paths are author-specific
             key = (fa.unit.path, ref.path)
@@ -254,8 +283,7 @@ def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> Non
             if ABS_PATH.match(ref.path):
                 continue
             for c in _candidates(fa.unit.path, ref.path):
-                produced.setdefault(c, fa.unit.path)
-            produced.setdefault("#" + posixpath.basename(ref.path), fa.unit.path)
+                produced.setdefault(_tail(c), fa.unit.path)
 
     workflow_doc = bool(repo.workflow_files)
     seen_missing: Set[str] = set()
@@ -267,8 +295,7 @@ def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> Non
             cands = _candidates(fa.unit.path, p)
             if _exists(repo, cands):
                 continue
-            producer = next((produced[c] for c in cands if c in produced), None) or produced.get(
-                "#" + posixpath.basename(p))
+            producer = _producer(produced, cands)
             fa_key = cands[0]
             if producer == fa.unit.path:
                 continue
@@ -374,7 +401,12 @@ def _notebooks(facts: List[UnitFacts], f: List[Finding]) -> None:
             for o in c.outputs:
                 if isinstance(o, dict) and o.get("output_type") == "error":
                     ename = str(o.get("ename") or "Error")
-                    cls = ERROR_CLASS.get(ename, "code")
+                    evalue = str(o.get("evalue", ""))
+                    cls = ERROR_CLASS.get(ename) or ("data" if DATA_ERROR.search(f"{ename} {evalue}") else "code")
+                    prev_md = next((p.source for p in reversed(u.cells[:(c.index or 1) - 1]) if p.kind != "code"), "")
+                    if ename != "KeyboardInterrupt" and (
+                            DELIBERATE_ERROR.search(c.source) or DELIBERATE_ERROR.search(prev_md[-400:])):
+                        break  # tutorials show an error on purpose ("this will fail")
                     if ename == "KeyboardInterrupt":
                         msg = f"Cell {c.index} was saved after being interrupted, so its saved output is incomplete."
                     else:

@@ -452,3 +452,93 @@ def test_readme_rmd_install_commands_are_not_dependencies(scan):
     r = scan({"DESCRIPTION": "Package: p\nImports: dplyr\n", "README.Rmd": "```{r}\nremotes::install_github('a/b')\n```\n",
               "R/a.R": "library(dplyr)\n"})
     assert checks_of(r, "DEP003") == []
+
+
+# ---------------------------------------------------------------- ship-bar round A regressions
+
+def test_method_open_mode_is_not_a_path(scan):
+    r = scan({"requirements.txt": None, "pyproject.toml": '[project]\nname="x"\ndependencies=[]\nrequires-python=">=3.9"\n',
+              "x/run.py": 'import os\nfrom pathlib import Path\n'
+                          'def f(stdout, tmp):\n'
+                          '    with (stdout or Path(os.devnull)).open("wb") as fh: pass\n'
+                          '    with (tmp / "a").open("r+b") as fh: pass\n'
+                          '    Path("missing.txt").open("r")\n'})
+    assert [f.detail for f in checks_of(r, "DATA001")] == ["missing.txt"]
+
+
+def test_pyproject_arrays_with_extras_and_dependency_groups(scan):
+    r = scan({"requirements.txt": None, "pyproject.toml": """
+        [project]
+        name = "atlas"
+        requires-python = ">=3.10"
+        dependencies = [
+            "botocore[crt]>=1.4",  # brackets ] inside
+            "scikit-learn>=1.9",
+        ]
+
+        [dependency-groups]
+        dev = ["pytest>=8"]
+        report = ["jinja2>=3.1"]
+
+        [tool.poetry.group.docs.dependencies]
+        sphinx = "^7"
+    """, "run.py": "import sklearn, pytest, jinja2, botocore, sphinx\n"})
+    assert checks_of(r, "DEP003") == []
+
+
+def test_env_yml_pip_options_are_not_packages(scan):
+    r = scan({"requirements.txt": None, "environment.yml":
+              "dependencies:\n  - python=3.11\n  - numpy=1.26\n  - pip:\n    - --extra-index-url https://x.org\n    - torch==2.1\n",
+              "run.py": "import numpy, torch\n"})
+    assert checks_of(r, "DEP002") == []
+
+
+def test_path001_ignores_test_fixtures(scan):
+    r = scan({"tests/test_paths.py": 'assert f("C:\\\\data\\\\a.zarr")\nassert g("/home/user/x")\n',
+              "tests/testthat/test-a.R": 'expect_equal(f("C:/p/a.wav"), "a")\n',
+              "run.py": 'open("/Users/alice/data.csv")\n'})
+    assert [f.file for f in checks_of(r, "PATH001")] == ["run.py"]
+
+
+def test_r_withr_seed_counts_as_seed(scan):
+    r = scan({"requirements.txt": None, "DESCRIPTION": "Package: p\nImports: withr\nLicense: MIT\nDepends: R (>= 4.1)\n",
+              "analysis.R": "ids <- withr::with_seed(1, sample(1:10))\n"})
+    assert checks_of(r, "RAND001") == []
+
+
+def test_nb005_data_errors_and_deliberate_errors(scan):
+    def err(ename, evalue):
+        return [{"output_type": "error", "ename": ename, "evalue": evalue, "traceback": []}]
+    nb = notebook([
+        ("import geopandas as gpd\ngpd.read_file('x.shp')", 1, err("DataSourceError", "x.shp: No such file or directory")),
+        ("md", "The method will fail if the series overlap:"),
+        ("ts.concatenate(other)", 2, err("ValueError", "GTIs must be mutually exclusive")),
+        ("# This will fail\nf([1])", 3, err("TypeError", "bad")),
+    ])
+    r = scan({"a.ipynb": nb, "requirements.txt": "geopandas==1\n"})
+    f = checks_of(r, "NB005")
+    assert len(f) == 1 and f[0].cell == 1 and f[0].category == "data"
+
+
+def test_wf001_needs_matching_folders_not_just_file_name(scan):
+    r = scan({"requirements.txt": "pandas==2\n",
+              "scripts/eval.R": 'write.csv(df, "output/hospital.csv")\n',
+              "scripts/report.py": 'import pandas as pd\npd.read_csv("target-data/hospital.csv")\n'})
+    assert checks_of(r, "WF001") == []
+    assert [f.detail for f in checks_of(r, "DATA001")] == ["target-data/hospital.csv"]
+
+
+def test_env001_satisfied_by_ci_python_version(scan):
+    r = scan({".python-version": None, "run.py": "import numpy\n",
+              ".github/workflows/ci.yml": "jobs:\n  t:\n    steps:\n      - uses: actions/setup-python@v5\n        with: { python-version: '3.12' }\n"})
+    assert checks_of(r, "ENV001") == []
+
+
+def test_notebook_names_defined_through_magics_and_broken_cells(scan):
+    nb = notebook([
+        ("from shapely.geometry import Point\nimport warnings\nprint(x))", 1),  # unparseable cell
+        ("%memit ps_it = make()\n%time y = 2", 2),
+        ("print(Point, ps_it, y)", 3),
+    ])
+    r = scan({"a.ipynb": nb, "requirements.txt": "shapely==2\n"})
+    assert checks_of(r, "NB003") == [] and checks_of(r, "NB002") == []

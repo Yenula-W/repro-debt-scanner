@@ -90,7 +90,8 @@ REGEX_DEFS = [
     re.compile(r"^\s*for\s+([A-Za-z_]\w*(?:\s*,\s*[A-Za-z_]\w*)*)\s+in\b", re.M),
     re.compile(r"\bas\s+([A-Za-z_]\w*)"),
     re.compile(r"^\s*import\s+([A-Za-z_]\w*)", re.M),
-    re.compile(r"^\s*from\s+\S+\s+import\s+\(?([\w\s,]+)\)?\s*$", re.M),
+    re.compile(r"^[ \t]*from[ \t]+\S+[ \t]+import[ \t]+([^(\n#]+)", re.M),
+    re.compile(r"^[ \t]*from[ \t]+\S+[ \t]+import[ \t]*\(([^)]*)\)", re.M),
 ]
 
 
@@ -99,8 +100,12 @@ def regex_defs(src: str) -> Set[str]:
     out: Set[str] = set()
     for rx in REGEX_DEFS:
         for m in rx.finditer(src):
-            out.update(n.strip() for n in m.group(1).split(",") if n.strip().isidentifier())
+            out.update(n for n in re.split(r"[,\s]+", m.group(1))
+                       if n.isidentifier() and n not in ("as", "import"))
     return out
+
+
+STMT_MAGIC = re.compile(r"%(time|timeit|memit|prun|capture)\b(\s+-\S+(\s+\d+)?)*\s+(?=\S)")
 
 
 def clean_cell_source(src: str) -> Optional[str]:
@@ -114,12 +119,20 @@ def clean_cell_source(src: str) -> Optional[str]:
     for ln in lines:
         s = ln.lstrip()
         code = re.sub(r"\s+#.*$", "", s)  # a `?` inside a trailing comment is not IPython help
+        m = STMT_MAGIC.match(s)
+        if m:
+            # `%time x = f()` still runs (and defines) the statement after the magic
+            out.append(ln[: len(ln) - len(s)] + " " * m.end() + s[m.end():])
+            continue
         if s.startswith(("%", "!")) or HELP_LINE.match(code):
             indent = ln[: len(ln) - len(s)]
             out.append(indent + "pass")
         else:
             out.append(ln)
     return "\n".join(out)
+
+
+OPEN_MODULES = {"io", "h5py", "codecs", "gzip", "bz2", "lzma", "tarfile", "zipfile", "os", "builtins"}
 
 
 class _Resolver:
@@ -411,10 +424,18 @@ def _scan_call(node: ast.Call, cell: Cell, facts: UnitFacts, resolver: _Resolver
         return
 
     # ---- file reads
-    if name == "open" and isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Call):
-        return  # Path(x).open("r+"): the argument is a mode, the path is the receiver
+    if name == "open" and isinstance(node.func, ast.Attribute) and not (
+            isinstance(node.func.value, ast.Name) and node.func.value.id in OPEN_MODULES):
+        # A method call such as Path(x).open("r+") or (tmp / name).open("wb"): the argument is a mode and
+        # the path is the receiver.
+        path = resolver.resolve(node.func.value)
+        mode = node.args[0].value if node.args and isinstance(node.args[0], ast.Constant) and isinstance(
+            node.args[0].value, str) else _open_mode(node)
+        if path is not None and _looks_like_file(path):
+            (facts.writes if any(c in mode for c in "wax") else facts.reads).append(Ref(path, cell.index, line))
+        return
     if name == "open" or (name == "File" and root in ("h5py", "File")):
-        if root not in ("", "open", "io", "h5py", "File", "codecs", "gzip", "bz2"):
+        if root not in ("", "open", "File") and root not in OPEN_MODULES:
             return
         path = _first_path_arg(node, resolver)
         mode = _open_mode(node)
@@ -476,7 +497,7 @@ def analyze_r(unit: CodeUnit) -> UnitFacts:
                     if _looks_like_file(s.group(2)):
                         facts.writes.append(Ref(s.group(2), cell.index, n))
                         break
-            if re.search(r"\bset\.seed\(", line):
+            if re.search(r"\bset\.seed\(|\b(with|local)_seed\(|\bwith_preserve_seed\(|\bset_random_seed\(", line):
                 facts.has_seed = True
             rm = re.search(r"\b(sample|rnorm|runif|rbinom|rpois|sample_n|sample_frac|slice_sample|kmeans|randomForest|createDataPartition|rexp|rgamma|rbeta)\(", line)
             if rm:
