@@ -201,7 +201,7 @@ venvs. Every README usage line was run verbatim against a copy of `examples/mess
 
 | Python | pip | Install | README usage |
 |---|---|---|---|
-| 3.9.7 (macOS framework) | 21.2.3 | 8 s | all 8 lines OK on `63f8428`: 15 findings (5 needs review), grade D from the 10 confident ones; 10 with `--confident-only`; `--fail-above 25` exits 1 |
+| 3.9.7 (macOS framework) | 21.2.3 | 8 s | all 8 lines OK (re-checked on `5ca09e6`, 108 tests passing on each): 15 findings (5 needs review), grade D from the 10 confident ones; 10 with `--confident-only`; `--fail-above 25` exits 1 |
 | 3.12.15 | 25.0.1 | 4 s | identical |
 | 3.13.16 | 26.2.1 | 5 s | identical |
 
