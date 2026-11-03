@@ -114,6 +114,8 @@ IMPORT_TO_DIST = {
 
 # Packages that ship inside another very common one; importing them is fine if the parent is declared.
 PROVIDED_BY = {
+    # narrow, hard dependencies only: importing the child is fine when the parent is declared
+    "omegaconf": ["hydra-core"],
     "pkg_resources": ["setuptools", "pip"],
     "mpl_toolkits": ["matplotlib"],
     "pylab": ["matplotlib"],

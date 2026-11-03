@@ -356,6 +356,8 @@ def _toml_array(text: str, start: int) -> str:
 
 def _parse_pyproject(repo: Repo, rel: str, text: str) -> None:
     d = DepSpec(rel)
+    if re.search(r"^\s*license\s*=|License ::", text, re.M):
+        repo.license_found = True  # `license = {text = "MIT"}`, `license = "MIT"` or a license classifier
     if re.search(r"^\s*(requires-python|python)\s*=", text, re.M):
         d.python_version = True
     m = re.search(r"^\s*dependencies\s*=\s*\[", text, re.M)
@@ -398,6 +400,8 @@ def _parse_pyproject(repo: Repo, rel: str, text: str) -> None:
 
 def _parse_setup_py(repo: Repo, rel: str, text: str) -> None:
     d = DepSpec(rel)
+    if re.search(r"""\blicense\s*=\s*["'][^"']+["']|License ::""", text):
+        repo.license_found = True
     if "python_requires" in text:
         d.python_version = True
     m = re.search(r"install_requires\s*=\s*\[(.*?)\]", text, re.S)
@@ -412,6 +416,8 @@ def _parse_setup_py(repo: Repo, rel: str, text: str) -> None:
 
 def _parse_setup_cfg(repo: Repo, rel: str, text: str) -> None:
     d = DepSpec(rel)
+    if re.search(r"^\s*license\s*=\s*\S|License ::", text, re.M):
+        repo.license_found = True
     if "python_requires" in text:
         d.python_version = True
     m = re.search(r"install_requires\s*=\s*\n((?:[ \t]+\S.*\n?)+)", text)

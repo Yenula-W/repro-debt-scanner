@@ -1,3 +1,4 @@
+import pytest
 from conftest import checks_of, notebook
 
 
@@ -627,3 +628,52 @@ def test_wf001_numbered_files_state_the_order(scan):
              "notebooks/plot.py": 'import scanpy as sc\na = sc.read_h5ad("02_qc.h5ad")\n'}
     r = scan(files)
     assert [f.file for f in checks_of(r, "WF001")] == ["notebooks/plot.py"]
+
+
+# ---------------------------------------------------------------- candidate-scan false positives
+
+def test_nb002_honours_globals_guard(scan):
+    nb = notebook([
+        ("import numpy as np", 1),
+        ("if 'order' in globals():\n    print(order)\nelif \"order\" not in locals():\n    order = [1]\n"
+         "x = [c for c in order] if 'order' in vars() else []", 2),
+        ("order = [3, 2, 1]", 3),
+        ("print(later)", 4),
+        ("later = 1", 5),
+    ])
+    r = scan({"a.ipynb": nb})
+    assert [f.detail for f in checks_of(r, "NB002")] == ["a.ipynb:later"]
+
+
+def test_env001_accepts_version_stated_in_readme(scan):
+    for text in ("Tested with **Python 3.12**.", "Requires python>=3.9", "Use Python version 3.10.",
+                 "conda create -n x python=3.11", "Built on R 4.3.1", "Needs R (>= 4.1)"):
+        r = scan({".python-version": None, "README.md": f"# x\n```\npython run.py\n```\n{text}\n",
+                  "run.py": "import numpy\n"})
+        assert checks_of(r, "ENV001") == [], text
+    r = scan({".python-version": None, "README.md": "# x\n```\npython run.py\n```\nWritten in Python 3.\n",
+              "run.py": "import numpy\n"})
+    assert len(checks_of(r, "ENV001")) == 1  # "Python 3" alone is not a version
+
+
+@pytest.mark.parametrize("meta", [
+    {"pyproject.toml": '[project]\nname = "x"\nlicense = { text = "MIT" }\n'},
+    {"pyproject.toml": '[project]\nname = "x"\nclassifiers = ["License :: OSI Approved :: MIT License"]\n'},
+    {"setup.cfg": "[metadata]\nname = x\nlicense = BSD-3-Clause\n"},
+    {"setup.py": "from setuptools import setup\nsetup(name='x', license='MIT')\n"},
+])
+def test_doc003_accepts_license_in_project_metadata(scan, meta):
+    r = scan({"LICENSE": None, **meta, "run.py": "import numpy\n"})
+    assert checks_of(r, "DOC003") == []
+
+
+def test_doc003_license_files_alone_is_not_a_license(scan):
+    r = scan({"LICENSE": None, "pyproject.toml": '[project]\nname = "x"\nlicense-files = ["LICEN[CS]E*"]\n'})
+    assert len(checks_of(r, "DOC003")) == 1
+
+
+def test_omegaconf_covered_by_hydra_core(scan):
+    r = scan({"requirements.txt": "hydra-core==1.3.2\n", "run.py": "from omegaconf import OmegaConf\nimport hydra\n"})
+    assert checks_of(r, "DEP003") == []
+    r = scan({"requirements.txt": "numpy==1.26\n", "run.py": "from omegaconf import OmegaConf\nimport numpy\n"})
+    assert [f.detail for f in checks_of(r, "DEP003")] == ["omegaconf"]

@@ -311,6 +311,7 @@ class _Flow(ast.NodeVisitor):
         self.defs: Set[str] = set()
         self.uses: List[Tuple[str, int]] = []
         self.star = False
+        self.guarded: Set[str] = set()  # names checked with `"x" in globals()` before use
 
     def visit_Name(self, node: ast.Name) -> None:
         if isinstance(node.ctx, ast.Load):
@@ -360,6 +361,15 @@ class _Flow(ast.NodeVisitor):
             self.star = True
         self.generic_visit(node)
 
+    def visit_Compare(self, node: ast.Compare) -> None:
+        # `if "x" in globals():` checks that a name exists before using it, so later uses are not hidden state
+        if (isinstance(node.left, ast.Constant) and isinstance(node.left.value, str)
+                and any(isinstance(op, (ast.In, ast.NotIn)) for op in node.ops)
+                and any(isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                        and c.func.id in ("globals", "locals", "vars", "dir") for c in node.comparators)):
+            self.guarded.add(node.left.value)
+        self.generic_visit(node)
+
 
 def analyze_python(unit: CodeUnit) -> UnitFacts:
     facts = UnitFacts(unit)
@@ -387,7 +397,8 @@ def analyze_python(unit: CodeUnit) -> UnitFacts:
             fl = _Flow()
             for stmt in tree.body:
                 fl.visit(stmt)
-            facts.cell_flow.append((cell.index or 0, fl.defs, fl.uses, fl.star))
+            uses = [u for u in fl.uses if u[0] not in fl.guarded]
+            facts.cell_flow.append((cell.index or 0, fl.defs, uses, fl.star))
     if not unit.is_notebook:
         facts.is_entrypoint = _is_script(unit.cells[0].source, facts)
     else:

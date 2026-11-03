@@ -42,6 +42,9 @@ ERROR_CLASS = {
     "ParserError": "data", "PermissionError": "data", "HTTPError": "data", "URLError": "data",
     "KeyError": "data",
 }
+# "Python 3.10", "python>=3.9", "tested with Python 3.12", "R 4.3", "R (>= 4.1)": a stated version with a minor part
+README_VERSION = re.compile(r"\bpython\s*(?:version\s*)?(?:[=<>~!^]=?|:)?\s*v?3\.\d+|"
+                            r"\bR\s*(?:version\s*)?\(?\s*(?:[=<>]=?)?\s*v?[34]\.\d+\.?\d*", re.I)
 DATA_ERROR = re.compile(r"No such file|does not exist|not found|cannot open|could not open|Errno 2|"
                         r"DataSourceError|DriverError|RasterioIOError|OpenFailed", re.I)
 DELIBERATE_ERROR = re.compile(r"\b(will|should|would|is going to|expected to)\s+(fail|raise|error|throw)|"
@@ -144,7 +147,7 @@ def _deps(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
                     shown = ", ".join(names[:6]) + (f" (+{len(names) - 6} more)" if len(names) > 6 else "")
                     f.append(Finding("DEP002", f"{len(names)} of {len(d.names)} packages in {d.file} have no exact "
                                      f"version: {shown}.", d.file, d.unpinned[0][1], detail=d.file))
-    if not repo.python_version_recorded:
+    if not repo.python_version_recorded and not README_VERSION.search(repo.readme):
         nb_versions = sorted({u.nb_python_version for u in repo.units if u.nb_python_version})
         which = "Python" if "python" in langs else "R"
         extra = (f" (notebook metadata says {', '.join(nb_versions[:3])}, but that is not an installable spec)"
