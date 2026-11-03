@@ -126,3 +126,9 @@ def test_confident_only_does_not_leak_into_steps(make_repo, tmp_path, capsys):
     main(["scan", str(root), "--format", "json"])
     steps = {s["file"]: s for s in json.loads(capsys.readouterr().out)["steps"]}
     assert steps["model.py"]["upstream"] == ["clean.py"] and steps["model.py"]["status"] == "blocked"
+
+
+def test_no_dependency_file_advice_covers_r(make_repo, capsys):
+    # zenodo 18549093: an R-only deposit was told only to run pip freeze.
+    main(["scan", str(make_repo({"run.R": "library(dplyr)\n"}, base=False))])
+    assert "renv::init()" in capsys.readouterr().out

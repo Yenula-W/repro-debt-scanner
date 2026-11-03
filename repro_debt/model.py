@@ -44,8 +44,8 @@ CHECKS: Dict[str, CheckInfo] = {
     c.id: c
     for c in [
         CheckInfo("DEP001", "No dependency file", "high", "dependency",
-                  "Add a requirements.txt (or environment.yml) listing every package the code needs. "
-                  "From your working environment run `pip freeze > requirements.txt` and trim it to what you import."),
+                  "Add a dependency file listing every package the code needs. Python: run `pip freeze > requirements.txt` "
+                  "and trim it to what you import. R: run `renv::init()` to create renv.lock."),
         CheckInfo("DEP002", "Dependencies without exact versions", "medium", "dependency",
                   "Pin exact versions (e.g. `numpy==1.26.4`) so others install what you used. "
                   "Unpinned: {examples}."),
