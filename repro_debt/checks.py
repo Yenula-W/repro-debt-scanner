@@ -505,10 +505,10 @@ def _steps(repo: Repo, facts: List[UnitFacts], findings: List[Finding]) -> List[
         error_cls: Optional[str] = None
         for x in by_file.get(fa.unit.path, []):
             if x.check == "DATA001":
-                s.reasons.append(f"missing input `{x.detail}`")
+                s.reasons.append(f"missing input `{x.detail}` (needs review)")
                 cats.append("data")
             elif x.check == "PATH001":
-                s.reasons.append(f"absolute path `{x.detail}`")
+                s.reasons.append(f"absolute path `{x.detail}` (needs review)")
                 cats.append("data")
             elif x.check == "DEP003":
                 s.reasons.append(f"undeclared package `{x.detail}`")

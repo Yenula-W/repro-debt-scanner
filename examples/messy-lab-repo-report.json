@@ -3,35 +3,22 @@
   "version": "0.1.0",
   "target": "messy-lab-repo",
   "score": {
-    "debt": 75,
-    "grade": "F",
-    "summary": "Severe debt; results are very unlikely to be reproducible as-is.",
+    "debt": 46,
+    "grade": "D",
+    "summary": "Heavy debt; re-running this would likely need help from the authors.",
     "by_check": {
-      "DATA001": 10,
       "NB002": 10,
-      "PATH001": 10,
       "DEP002": 4,
       "DEP003": 8,
       "DOC002": 4,
       "DOC003": 4,
-      "DOC004": 4,
       "ENV001": 4,
       "NB001": 4,
       "NB005": 4,
-      "RAND001": 4,
-      "WF001": 4,
-      "FIG001": 1
+      "RAND001": 4
     }
   },
   "top_fixes": [
-    {
-      "check": "DATA001",
-      "title": "Input file missing and nothing creates it",
-      "severity": "high",
-      "count": 1,
-      "points": 10,
-      "fix": "Include these input files, or explain in the README where to download them and where to put them: `data/plate_metadata.csv`."
-    },
     {
       "check": "NB002",
       "title": "Notebook uses a name defined in a later cell",
@@ -39,14 +26,6 @@
       "count": 1,
       "points": 10,
       "fix": "Move the cell that defines these names above the cell that uses them, then Restart & Run All: `figures.ipynb:rates`."
-    },
-    {
-      "check": "PATH001",
-      "title": "Hardcoded absolute path",
-      "severity": "high",
-      "count": 1,
-      "points": 10,
-      "fix": "Replace absolute paths that only exist on your computer with paths relative to the repository (e.g. `Path(__file__).parent / 'data'`). Found: `/Users/alice/Dropbox/lab/raw_counts.csv`."
     },
     {
       "check": "DEP003",
@@ -63,12 +42,32 @@
       "count": 1,
       "points": 4,
       "fix": "Pin exact versions (e.g. `numpy==1.26.4`) so others install what you used. Unpinned: `requirements.txt`."
+    },
+    {
+      "check": "DOC002",
+      "title": "README lacks run instructions",
+      "severity": "medium",
+      "count": 1,
+      "points": 4,
+      "fix": "Add a 'How to reproduce' section to the README with the exact commands, in order, that regenerate your results."
+    },
+    {
+      "check": "DOC003",
+      "title": "No license",
+      "severity": "medium",
+      "count": 1,
+      "points": 4,
+      "fix": "Add a LICENSE file (MIT or BSD-3 are common for research code) so others are allowed to reuse it."
     }
   ],
   "counts": {
-    "high": 3,
-    "medium": 11,
-    "low": 1
+    "high": 1,
+    "medium": 9,
+    "low": 0
+  },
+  "needs_review": {
+    "count": 5,
+    "note": "These come from less reliable checks: in held-out tests about half of them were wrong (see EVALUATION.md). Check each one against the code before acting. They do not count toward the grade."
   },
   "stats": {
     "python_files": 2,
@@ -99,7 +98,7 @@
       "status": "blocked",
       "likely_break": "data",
       "reasons": [
-        "absolute path `/Users/alice/Dropbox/lab/raw_counts.csv`"
+        "absolute path `/Users/alice/Dropbox/lab/raw_counts.csv` (needs review)"
       ],
       "upstream": []
     },
@@ -109,7 +108,7 @@
       "likely_break": "data",
       "reasons": [
         "undeclared package `sklearn`",
-        "missing input `data/plate_metadata.csv`"
+        "missing input `data/plate_metadata.csv` (needs review)"
       ],
       "upstream": [
         "scripts/01_clean.py"
@@ -117,18 +116,6 @@
     }
   ],
   "findings": [
-    {
-      "check": "DATA001",
-      "message": "Reads `data/plate_metadata.csv`, which is not in the repository and no script creates it.",
-      "file": "scripts/02_fit.py",
-      "line": 6,
-      "cell": null,
-      "detail": "data/plate_metadata.csv",
-      "severity": "high",
-      "category": "data",
-      "title": "Input file missing and nothing creates it",
-      "location": "scripts/02_fit.py:6"
-    },
     {
       "check": "NB002",
       "message": "Cell 1 uses `rates`, which is only defined later in cell 2; this only worked because of hidden kernel state.",
@@ -139,19 +126,8 @@
       "severity": "high",
       "category": "code",
       "title": "Notebook uses a name defined in a later cell",
-      "location": "figures.ipynb cell 1 line 2"
-    },
-    {
-      "check": "PATH001",
-      "message": "Absolute path `/Users/alice/Dropbox/lab/raw_counts.csv` only exists on the author's machine.",
-      "file": "scripts/01_clean.py",
-      "line": 3,
-      "cell": null,
-      "detail": "/Users/alice/Dropbox/lab/raw_counts.csv",
-      "severity": "high",
-      "category": "data",
-      "title": "Hardcoded absolute path",
-      "location": "scripts/01_clean.py:3"
+      "location": "figures.ipynb cell 1 line 2",
+      "needs_review": false
     },
     {
       "check": "DEP002",
@@ -163,7 +139,8 @@
       "severity": "medium",
       "category": "dependency",
       "title": "Dependencies without exact versions",
-      "location": "requirements.txt:1"
+      "location": "requirements.txt:1",
+      "needs_review": false
     },
     {
       "check": "DEP003",
@@ -175,7 +152,8 @@
       "severity": "medium",
       "category": "dependency",
       "title": "Imported package not declared",
-      "location": "figures.ipynb cell 1 line 1"
+      "location": "figures.ipynb cell 1 line 1",
+      "needs_review": false
     },
     {
       "check": "DEP003",
@@ -187,7 +165,8 @@
       "severity": "medium",
       "category": "dependency",
       "title": "Imported package not declared",
-      "location": "scripts/02_fit.py:3"
+      "location": "scripts/02_fit.py:3",
+      "needs_review": false
     },
     {
       "check": "DOC002",
@@ -199,7 +178,8 @@
       "severity": "medium",
       "category": "docs",
       "title": "README lacks run instructions",
-      "location": "README.md"
+      "location": "README.md",
+      "needs_review": false
     },
     {
       "check": "DOC003",
@@ -211,19 +191,8 @@
       "severity": "medium",
       "category": "docs",
       "title": "No license",
-      "location": "(repository)"
-    },
-    {
-      "check": "DOC004",
-      "message": "The code reads data files but the README does not say where the data comes from or how to get it.",
-      "file": "README.md",
-      "line": null,
-      "cell": null,
-      "detail": null,
-      "severity": "medium",
-      "category": "docs",
-      "title": "No data availability note",
-      "location": "README.md"
+      "location": "(repository)",
+      "needs_review": false
     },
     {
       "check": "ENV001",
@@ -235,7 +204,8 @@
       "severity": "medium",
       "category": "environment",
       "title": "Python/R version not recorded",
-      "location": "(repository)"
+      "location": "(repository)",
+      "needs_review": false
     },
     {
       "check": "NB001",
@@ -247,7 +217,8 @@
       "severity": "medium",
       "category": "code",
       "title": "Notebook cells executed out of order",
-      "location": "figures.ipynb cell 2"
+      "location": "figures.ipynb cell 2",
+      "needs_review": false
     },
     {
       "check": "NB005",
@@ -259,7 +230,8 @@
       "severity": "medium",
       "category": "data",
       "title": "Notebook saved with error outputs",
-      "location": "figures.ipynb cell 3"
+      "location": "figures.ipynb cell 3",
+      "needs_review": false
     },
     {
       "check": "RAND001",
@@ -271,7 +243,47 @@
       "severity": "medium",
       "category": "code",
       "title": "Randomness without a fixed seed",
-      "location": "scripts/02_fit.py:7"
+      "location": "scripts/02_fit.py:7",
+      "needs_review": false
+    },
+    {
+      "check": "DATA001",
+      "message": "Reads `data/plate_metadata.csv`, which is not in the repository and no script creates it.",
+      "file": "scripts/02_fit.py",
+      "line": 6,
+      "cell": null,
+      "detail": "data/plate_metadata.csv",
+      "severity": "high",
+      "category": "data",
+      "title": "Input file missing and nothing creates it",
+      "location": "scripts/02_fit.py:6",
+      "needs_review": true
+    },
+    {
+      "check": "PATH001",
+      "message": "Absolute path `/Users/alice/Dropbox/lab/raw_counts.csv` only exists on the author's machine.",
+      "file": "scripts/01_clean.py",
+      "line": 3,
+      "cell": null,
+      "detail": "/Users/alice/Dropbox/lab/raw_counts.csv",
+      "severity": "high",
+      "category": "data",
+      "title": "Hardcoded absolute path",
+      "location": "scripts/01_clean.py:3",
+      "needs_review": true
+    },
+    {
+      "check": "DOC004",
+      "message": "The code reads data files but the README does not say where the data comes from or how to get it.",
+      "file": "README.md",
+      "line": null,
+      "cell": null,
+      "detail": null,
+      "severity": "medium",
+      "category": "docs",
+      "title": "No data availability note",
+      "location": "README.md",
+      "needs_review": true
     },
     {
       "check": "WF001",
@@ -283,7 +295,8 @@
       "severity": "medium",
       "category": "workflow",
       "title": "Undocumented intermediate step",
-      "location": "figures.ipynb cell 2 line 2"
+      "location": "figures.ipynb cell 2 line 2",
+      "needs_review": true
     },
     {
       "check": "FIG001",
@@ -295,8 +308,9 @@
       "severity": "low",
       "category": "workflow",
       "title": "Result figures with no code that produces them",
-      "location": "figures/fig2_supplement.png"
+      "location": "figures/fig2_supplement.png",
+      "needs_review": true
     }
   ],
-  "opt_in_not_run": []
+  "confident_only": false
 }

@@ -3,10 +3,16 @@
 Measured on 2026-11-02/03 against the shared adoption-ready bar (`~/Desktop/LabAdoption/ADOPTION_BAR.md`) and
 then the stricter ship bar (`~/Desktop/LabAdoption/SHIP_BAR.md`, section 7).
 
-Summary: **does not meet the ship bar.** None of the 3 allowed untouched rounds passed. As the bar requires, the
-five checks still below 80% after the last round (PATH001, DATA001, WF001, FIG001, DOC004) are now **opt-in**
-(`--all-checks`). The 13 on-by-default checks scored 98% and 96% in the last two rounds, but code changed between
-those rounds, so they have not formally passed either. It remains fit for a **supervised pilot**: you run it and a
+Summary: **does not meet the ship bar.** None of the 3 allowed untouched rounds passed. The five checks still below
+80% after the last round (PATH001, DATA001, WF001, FIG001, DOC004) run by default but are tagged **"needs review"**
+(the user's decision on 2026-11-03, instead of making them opt-in):
+- they are listed in a separate section
+- they are flagged in every output format
+- they never count toward the score or grade
+- `--confident-only` hides them
+
+The 13 confident checks scored 98% and 96% in the last two rounds, but code changed between those rounds, so they
+have not formally passed either. It remains fit for a **supervised pilot**: you run it and a
 person skims each report before it goes to an author. Known gaps are listed at the end.
 
 ## 1. Robustness
@@ -120,28 +126,28 @@ The cap was 3 rounds.
 
 Per-check precision, untouched, as correct plus debatable out of the sample:
 
-| Check | A | B | C | Default now |
-|---|---|---|---|---|
-| DEP001 | 4/4 | 5/5 | 5/5 | on |
-| DEP002 | 4/5 | 5/5 | 5/5 | on |
-| DEP003 | **2/5** | 4/5 | 4/5 | on |
-| ENV001 | **2/5** | 5/5 | 5/5 | on |
-| RAND001 | 4/5 | 5/5 | 4/5 | on |
-| NB001 | 5/5 | 5/5 | 5/5 | on |
-| NB002 | 3/3 | 1/1 | 3/3 | on |
-| NB003 | **3/5** | 5/5 | 2/2 | on |
-| NB004 | 5/5 | 5/5 | 5/5 | on |
-| NB005 | 4/5 | 1/1 | 3/3 | on |
-| DOC001 | n/a | n/a | n/a | on |
-| DOC002 | 2/2 | 2/2 | 3/3 | on |
-| DOC003 | 4/4 | 5/5 | 5/5 | on |
-| PATH001 | **1/5** | 4/5 | **0/5** | **opt-in** |
-| DATA001 | **3/5** | **2/5** | **3/5** | **opt-in** |
-| WF001 | **3/5** | 5/5 | **2/5** | **opt-in** |
-| FIG001 | n/a | 1/1 | **0/1** | **opt-in** |
-| DOC004 | 1/1 | **0/2** | **0/1** | **opt-in** |
+| Check | A | B | C | Pooled | Status now |
+|---|---|---|---|---|---|
+| DEP001 | 4/4 | 5/5 | 5/5 | 100% (14/14) | confident |
+| DEP002 | 4/5 | 5/5 | 5/5 | 93% (14/15) | confident |
+| DEP003 | **2/5** | 4/5 | 4/5 | 67% (10/15) | confident |
+| ENV001 | **2/5** | 5/5 | 5/5 | 80% (12/15) | confident |
+| RAND001 | 4/5 | 5/5 | 4/5 | 87% (13/15) | confident |
+| NB001 | 5/5 | 5/5 | 5/5 | 100% (15/15) | confident |
+| NB002 | 3/3 | 1/1 | 3/3 | 100% (7/7) | confident |
+| NB003 | **3/5** | 5/5 | 2/2 | 83% (10/12) | confident |
+| NB004 | 5/5 | 5/5 | 5/5 | 100% (15/15) | confident |
+| NB005 | 4/5 | 1/1 | 3/3 | 89% (8/9) | confident |
+| DOC001 | n/a | n/a | n/a | not sampled | confident |
+| DOC002 | 2/2 | 2/2 | 3/3 | 100% (7/7) | confident |
+| DOC003 | 4/4 | 5/5 | 5/5 | 100% (14/14) | confident |
+| PATH001 | **1/5** | 4/5 | **0/5** | 33% (5/15) | **needs review** |
+| DATA001 | **3/5** | **2/5** | **3/5** | 53% (8/15) | **needs review** |
+| WF001 | **3/5** | 5/5 | **2/5** | 67% (10/15) | **needs review** |
+| FIG001 | n/a | 1/1 | **0/1** | 50% (1/2) | **needs review** |
+| DOC004 | 1/1 | **0/2** | **0/1** | 25% (1/4) | **needs review** |
 
-Precision of only the checks that are on by default:
+Precision of the confident checks only:
 
 | Round | Precision | Lowest check |
 |---|---|---|
@@ -195,7 +201,7 @@ venvs. Every README usage line was run verbatim against a copy of `examples/mess
 
 | Python | pip | Install | README usage |
 |---|---|---|---|
-| 3.9.7 (macOS framework) | 21.2.3 | 8 s | all 8 lines OK: 10 findings by default, 15 with `--all-checks` (grade F), `--fail-above 25` exits 1 |
+| 3.9.7 (macOS framework) | 21.2.3 | 8 s | all 8 lines OK: 10 findings by default, 15 with `--all-checks` (grade F), `--fail-above 25` exits 1. That was measured before the switch to "needs review"; usage is now `--confident-only` |
 | 3.12.15 | 25.0.1 | 3 s | identical |
 | 3.13.16 | 26.2.1 | 4 s | identical |
 
@@ -232,8 +238,10 @@ Round inputs (GitHub `owner/repo`):
 
 ## Known limitations
 
-- **Ship bar not met.** No 2 untouched rounds in a row passed (section 7). The 5 data and workflow checks are
-  opt-in. Enabling them by default needs a new untouched round, which is beyond the 3-round cap.
+- **Ship bar not met.** No 2 untouched rounds in a row passed (section 7). The 5 data and workflow checks run by
+  default but are tagged "needs review" and kept out of the grade. Measured untouched precision for those checks
+  is PATH001 33%, DATA001 53%, WF001 67%, FIG001 50% (n=2) and DOC004 25% (n=4); together about half were wrong.
+  Fixes made after each round have not been re-measured.
 
 - **Static analysis only.** It never runs code, so problems that only appear at runtime (wrong results,
   network or API changes) are out of scope.

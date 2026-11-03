@@ -33,37 +33,44 @@ repro-debt scan path/to/repo --md report.md --json report.json -q
 repro-debt scan . --fail-above 25                  # exit 1 if debt score > 25 (for CI)
 repro-debt scan . --github-annotations             # ::error file=...:: lines for GitHub Actions
 repro-debt scan . --exclude tests --exclude 'vendor/*'   # skip paths
-repro-debt scan . --all-checks                     # include the opt-in checks
-repro-debt checks                                  # list all checks ([opt-in] marked)
+repro-debt scan . --confident-only                 # hide findings marked "needs review"
+repro-debt checks                                  # list checks, measured precision, [needs review] tags
 ```
 
 `python -m repro_debt scan ...` works too.
 
 ## What it checks
 
-| ID | Severity | What it finds |
-|---|---|---|
-| DEP001 | high | No requirements.txt / environment.yml / pyproject / setup.py / Pipfile / DESCRIPTION / renv.lock / Dockerfile |
-| DEP002 | medium | Dependencies without exact versions (skipped when a lock file exists) |
-| DEP003 | medium | Packages imported in code but not declared (knows `sklearn`→`scikit-learn`, `cv2`→`opencv-python`, …; ignores stdlib and local modules) |
-| ENV001 | medium | Python/R version not recorded (`.python-version`, `requires-python`, `python=` in environment.yml, `FROM python:3.x`, …) |
-| PATH001 | high | **Opt-in.** Absolute paths like `/Users/…`, `/home/…`, `C:\…`, `/scratch/…` |
-| DATA001 | high | **Opt-in.** Files the code reads that are not in the repo and that nothing in the repo creates or downloads |
-| WF001 | medium | **Opt-in.** Undocumented intermediate step: script B reads a file only script A writes, and no Makefile/Snakefile/run_all/README says to run A first |
-| RAND001 | medium | Randomness (`np.random`, `random`, `torch.rand*`, scikit-learn without `random_state`, R `sample()`/`rnorm()`…) with no seed |
-| NB001 | medium | Notebook cells executed out of order (execution counts go backwards) |
-| NB002 | high | Notebook cell uses a name that is only defined in a *later* cell (hidden kernel state) |
-| NB003 | medium | Notebook uses a name never defined or imported |
-| NB004 | low | Saved outputs not from a clean run (counts don't start at 1, gaps, unrun cells) |
-| NB005 | medium | Notebook saved showing an error, classified as data / dependency / code |
-| FIG001 | low | **Opt-in.** Figures in `figures/`, `results/`, … that no code writes |
-| DOC001–003 | high/medium | No README; README without run commands; no LICENSE |
-| DOC004 | medium | **Opt-in.** Code reads data but the README has no data-availability note |
+| ID | Severity | Precision* | What it finds |
+|---|---|---|---|
+| DEP001 | high | 100% (14/14) | No requirements.txt / environment.yml / pyproject / setup.py / Pipfile / DESCRIPTION / renv.lock / Dockerfile |
+| DEP002 | medium | 93% (14/15) | Dependencies without exact versions (skipped when a lock file exists) |
+| DEP003 | medium | 67% (10/15) | Packages imported in code but not declared (knows `sklearn`→`scikit-learn`, `cv2`→`opencv-python`, …; ignores stdlib and local modules) |
+| ENV001 | medium | 80% (12/15) | Python/R version not recorded (`.python-version`, `requires-python`, `python=` in environment.yml, `FROM python:3.x`, …) |
+| PATH001 | high | 33% (5/15) | **Needs review.** Absolute paths like `/Users/…`, `/home/…`, `C:\…`, `/scratch/…` |
+| DATA001 | high | 53% (8/15) | **Needs review.** Files the code reads that are not in the repo and that nothing in the repo creates or downloads |
+| WF001 | medium | 67% (10/15) | **Needs review.** Undocumented intermediate step: script B reads a file only script A writes, and no Makefile/Snakefile/run_all/README says to run A first |
+| RAND001 | medium | 87% (13/15) | Randomness (`np.random`, `random`, `torch.rand*`, scikit-learn without `random_state`, R `sample()`/`rnorm()`…) with no seed |
+| NB001 | medium | 100% (15/15) | Notebook cells executed out of order (execution counts go backwards) |
+| NB002 | high | 100% (7/7) | Notebook cell uses a name that is only defined in a *later* cell (hidden kernel state) |
+| NB003 | medium | 83% (10/12) | Notebook uses a name never defined or imported |
+| NB004 | low | 100% (15/15) | Saved outputs not from a clean run (counts don't start at 1, gaps, unrun cells) |
+| NB005 | medium | 89% (8/9) | Notebook saved showing an error, classified as data / dependency / code |
+| FIG001 | low | 50% (1/2) | **Needs review.** Figures in `figures/`, `results/`, … that no code writes |
+| DOC001–003 | high/medium | n/a · 100% · 100% | No README; README without run commands; no LICENSE |
+| DOC004 | medium | 25% (1/4) | **Needs review.** Code reads data but the README has no data-availability note |
 
-**On by default vs opt-in.** The opt-in checks (PATH001, DATA001, WF001, FIG001, DOC004) missed the precision
-bar (at least 90% overall and no check below 80%) on the last held-out round in [EVALUATION.md](EVALUATION.md), so they are off unless
-you pass `--all-checks` (or `--enable PATH001`, etc.). Their findings are often right but need a human
-to skim them first. With them off, the step table only shows dependency and notebook blockers.
+\* Untouched, hand-checked precision on 75 held-out repos (correct + debatable / sampled), from the ship-bar rounds in [EVALUATION.md](EVALUATION.md) section 7. Fixes made after each round are not reflected.
+
+**Confident vs "needs review".** Every check runs by default. Five of them (PATH001, DATA001, WF001,
+FIG001 and DOC004) missed the precision bar in held-out tests. About half of their sampled findings were wrong,
+before the fixes that followed. Their findings are tagged **needs review** everywhere:
+- in a separate "Needs review" section after the confident findings in the Markdown/terminal report
+- with `"needs_review": true` in the JSON
+- as `notice` annotations titled `[needs review]` in GitHub Actions
+
+They never count toward the debt score or grade, and never appear in the top fixes, so a doubtful finding cannot
+lower a repo's grade. `--confident-only` hides them. Step-table reasons from these checks also say "(needs review)".
 
 File paths are resolved through simple constants (`DATA = "data"`, `Path(DATA) / "x.csv"`,
 `os.path.join`, f-strings). Downloads (`!wget`, `!curl -o`, `urlretrieve`, `wget.download`) count as
@@ -98,24 +105,23 @@ Top fixes are the issue types contributing the most points, each with a concrete
 
 ## Example report
 
-From [`examples/messy-lab-repo`](examples/messy-lab-repo), scanned with `--all-checks` (full output in
-[`examples/messy-lab-repo-report.md`](examples/messy-lab-repo-report.md)):
+From [`examples/messy-lab-repo`](examples/messy-lab-repo) (full output in
+[`examples/messy-lab-repo-report.md`](examples/messy-lab-repo-report.md)). The grade counts only the confident
+findings; the five findings that need review are listed after them:
 
-> **Debt score: 75 points — grade F.**
+> **Debt score: 46 points — grade D.**
 >
-> ## Top fixes
-> 1. **Input file missing and nothing creates it** (high, 1 found, 10 pts) — Include these input files, or explain in the README where to download them and where to put them: `data/plate_metadata.csv`.
-> 2. **Notebook uses a name defined in a later cell** (high, 1 found, 10 pts) — Move the cell that defines these names above the cell that uses them, then Restart & Run All: `figures.ipynb:rates`.
-> 3. **Hardcoded absolute path** (high, 1 found, 10 pts) — Replace absolute paths that only exist on your computer with paths relative to the repository (e.g. `Path(__file__).parent / 'data'`). Found: `/Users/alice/Dropbox/lab/raw_counts.csv`.
-> 4. **Imported package not declared** (medium, 2 found, 8 pts) — Add the packages your code imports but your dependency file does not list: `matplotlib`, `sklearn`.
-> 5. **Dependencies without exact versions** (medium, 1 found, 4 pts) — Pin exact versions (e.g. `numpy==1.26.4`) so others install what you used. Unpinned: `requirements.txt`.
+> ## Needs review> (5)
 >
-> ## Can each step be re-run?
-> | Step | Status | Likely cause if it breaks | Why |
+> _These come from less reliable checks: in held-out tests about half of them were wrong (see EVALUATION.md). Check each one against the code before acting. They do not count toward the grade._
+>
+> | Severity | Check | Where | What |
 > |---|---|---|---|
-> | `figures.ipynb` | ❌ blocked | data | undeclared package `matplotlib`; hidden-state name `rates`; saved error `FileNotFoundError: clean_counts.csv`; needs output of `scripts/01_clean.py` |
-> | `scripts/01_clean.py` | ❌ blocked | data | absolute path `/Users/alice/Dropbox/lab/raw_counts.csv` |
-> | `scripts/02_fit.py` | ❌ blocked | data | undeclared package `sklearn`; missing input `data/plate_metadata.csv`; needs output of `scripts/01_clean.py` |
+> | high · ⚠️ needs review | DATA001 Input file missing and nothing creates it | `scripts/02_fit.py:6` | Reads `data/plate_metadata.csv`, which is not in the repository and no script creates it. |
+> | high · ⚠️ needs review | PATH001 Hardcoded absolute path | `scripts/01_clean.py:3` | Absolute path `/Users/alice/Dropbox/lab/raw_counts.csv` only exists on the author's machine. |
+> | medium · ⚠️ needs review | DOC004 No data availability note | `README.md` | The code reads data files but the README does not say where the data comes from or how to get it. |
+> | medium · ⚠️ needs review | WF001 Undocumented intermediate step | `figures.ipynb cell 2 line 2` | Reads `clean_counts.csv`, which is created by `scripts/01_clean.py`, but nothing says `scripts/01_clean.py` must run first. |
+> | low · ⚠️ needs review | FIG001 Result figures with no code that produces them | `figures/fig2_supplement.png` | 1 figure/result file(s) have no code in the repo that writes them: figures/fig2_supplement.png. |
 
 ### Tested on real public repositories
 
@@ -147,7 +153,7 @@ jobs:
         with:
           path: .            # directory to scan
           exclude: ""        # e.g. "tests vendor/*"
-          all-checks: "false"  # "true" adds the opt-in checks
+          confident-only: "false"  # "true" hides findings marked "needs review"
           fail-above: ""     # e.g. "25" to fail the job above that score
           comment: "true"    # post/update a summary comment on PRs
 ```

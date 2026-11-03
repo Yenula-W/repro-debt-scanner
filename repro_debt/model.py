@@ -17,11 +17,28 @@ class CheckInfo:
     severity: str
     category: str  # dependency | data | code | environment | docs | workflow
     fix: str  # plain-English fix; may contain {examples}
-    on_by_default: bool = True  # False = opt-in: did not meet the precision bar on held-out repos
+    needs_review: bool = False  # True: below the precision bar on held-out repos; never counts toward the grade
 
 
-OPT_IN_NOTE = ("Opt-in: below the 90%/80% precision bar on held-out repos (see EVALUATION.md). "
-               "Enable with --all-checks or --enable ID.")
+NEEDS_REVIEW_NOTE = ("These come from less reliable checks: in held-out tests about half of them were wrong "
+                     "(see EVALUATION.md). Check each one against the code before acting. They do not count toward "
+                     "the grade.")
+
+# Untouched precision (correct + debatable / hand-judged sample) over ship-bar rounds A-C, 75 repos.
+PRECISION = {
+    "DEP001": (14, 14), "DEP002": (14, 15), "DEP003": (10, 15), "ENV001": (12, 15), "RAND001": (13, 15),
+    "NB001": (15, 15), "NB002": (7, 7), "NB003": (10, 12), "NB004": (15, 15), "NB005": (8, 9),
+    "DOC002": (7, 7), "DOC003": (14, 14),
+    "PATH001": (5, 15), "DATA001": (8, 15), "WF001": (10, 15), "FIG001": (1, 2), "DOC004": (1, 4),
+}
+
+
+def precision_text(cid: str) -> str:
+    if cid not in PRECISION:
+        return "not sampled"
+    ok, n = PRECISION[cid]
+    return f"{round(100 * ok / n)}% ({ok}/{n})"
+
 
 CHECKS: Dict[str, CheckInfo] = {
     c.id: c
@@ -39,13 +56,13 @@ CHECKS: Dict[str, CheckInfo] = {
                   "`requires-python` in pyproject.toml, or a `.python-version` file."),
         CheckInfo("PATH001", "Hardcoded absolute path", "high", "data",
                   "Replace absolute paths that only exist on your computer with paths relative to the repository "
-                  "(e.g. `Path(__file__).parent / 'data'`). Found: {examples}.", on_by_default=False),
+                  "(e.g. `Path(__file__).parent / 'data'`). Found: {examples}.", needs_review=True),
         CheckInfo("DATA001", "Input file missing and nothing creates it", "high", "data",
                   "Include these input files, or explain in the README where to download them and where to put them: "
-                  "{examples}.", on_by_default=False),
+                  "{examples}.", needs_review=True),
         CheckInfo("WF001", "Undocumented intermediate step", "medium", "workflow",
                   "Document the order the scripts must run in (a numbered list in the README, a run_all.sh, "
-                  "or a Makefile/Snakefile). Unclear: {examples}.", on_by_default=False),
+                  "or a Makefile/Snakefile). Unclear: {examples}.", needs_review=True),
         CheckInfo("RAND001", "Randomness without a fixed seed", "medium", "code",
                   "Set a random seed at the top of each script/notebook that uses randomness "
                   "(`np.random.seed(0)`, `random.seed(0)`, `torch.manual_seed(0)`, `set.seed(0)` in R) "
@@ -66,7 +83,7 @@ CHECKS: Dict[str, CheckInfo] = {
                   "These notebooks were saved showing errors; fix them and re-run: {examples}."),
         CheckInfo("FIG001", "Result figures with no code that produces them", "low", "workflow",
                   "Add or point to the code that generates these figures (or note they were made by hand): "
-                  "{examples}.", on_by_default=False),
+                  "{examples}.", needs_review=True),
         CheckInfo("DOC001", "No README", "high", "docs",
                   "Add a README.md explaining what the code does, how to install dependencies and how to run it."),
         CheckInfo("DOC002", "README lacks run instructions", "medium", "docs",
@@ -76,12 +93,13 @@ CHECKS: Dict[str, CheckInfo] = {
                   "Add a LICENSE file (MIT or BSD-3 are common for research code) so others are allowed to reuse it."),
         CheckInfo("DOC004", "No data availability note", "medium", "docs",
                   "The code reads data files. Add a 'Data availability' section to the README saying where the data "
-                  "lives (e.g. a Zenodo/Figshare DOI) and how to obtain it.", on_by_default=False),
+                  "lives (e.g. a Zenodo/Figshare DOI) and how to obtain it.", needs_review=True),
     ]
 }
 
 
-DEFAULT_CHECKS = frozenset(c.id for c in CHECKS.values() if c.on_by_default)
+CONFIDENT_CHECKS = frozenset(c.id for c in CHECKS.values() if not c.needs_review)
+REVIEW_CHECKS = frozenset(c.id for c in CHECKS.values() if c.needs_review)
 
 
 @dataclass
@@ -117,7 +135,12 @@ class Finding:
         d = asdict(self)
         d["title"] = CHECKS[self.check].title
         d["location"] = self.location
+        d["needs_review"] = CHECKS[self.check].needs_review
         return d
+
+    @property
+    def needs_review(self) -> bool:
+        return CHECKS[self.check].needs_review
 
 
 @dataclass
