@@ -33,7 +33,8 @@ repro-debt scan path/to/repo --md report.md --json report.json -q
 repro-debt scan . --fail-above 25                  # exit 1 if debt score > 25 (for CI)
 repro-debt scan . --github-annotations             # ::error file=...:: lines for GitHub Actions
 repro-debt scan . --exclude tests --exclude 'vendor/*'   # skip paths
-repro-debt checks                                  # list all checks
+repro-debt scan . --all-checks                     # include the opt-in checks
+repro-debt checks                                  # list all checks ([opt-in] marked)
 ```
 
 `python -m repro_debt scan ...` works too.
@@ -46,17 +47,23 @@ repro-debt checks                                  # list all checks
 | DEP002 | medium | Dependencies without exact versions (skipped when a lock file exists) |
 | DEP003 | medium | Packages imported in code but not declared (knows `sklearn`→`scikit-learn`, `cv2`→`opencv-python`, …; ignores stdlib and local modules) |
 | ENV001 | medium | Python/R version not recorded (`.python-version`, `requires-python`, `python=` in environment.yml, `FROM python:3.x`, …) |
-| PATH001 | high | Absolute paths like `/Users/…`, `/home/…`, `C:\…`, `/scratch/…` |
-| DATA001 | high | Files the code reads that are not in the repo and that nothing in the repo creates or downloads |
-| WF001 | medium | Undocumented intermediate step: script B reads a file only script A writes, and no Makefile/Snakefile/run_all/README says to run A first |
+| PATH001 | high | **Opt-in.** Absolute paths like `/Users/…`, `/home/…`, `C:\…`, `/scratch/…` |
+| DATA001 | high | **Opt-in.** Files the code reads that are not in the repo and that nothing in the repo creates or downloads |
+| WF001 | medium | **Opt-in.** Undocumented intermediate step: script B reads a file only script A writes, and no Makefile/Snakefile/run_all/README says to run A first |
 | RAND001 | medium | Randomness (`np.random`, `random`, `torch.rand*`, scikit-learn without `random_state`, R `sample()`/`rnorm()`…) with no seed |
 | NB001 | medium | Notebook cells executed out of order (execution counts go backwards) |
 | NB002 | high | Notebook cell uses a name that is only defined in a *later* cell (hidden kernel state) |
 | NB003 | medium | Notebook uses a name never defined or imported |
 | NB004 | low | Saved outputs not from a clean run (counts don't start at 1, gaps, unrun cells) |
 | NB005 | medium | Notebook saved showing an error, classified as data / dependency / code |
-| FIG001 | low | Figures in `figures/`, `results/`, … that no code writes |
-| DOC001–004 | high/medium | No README; README without run commands; no LICENSE; code reads data but no data-availability note |
+| FIG001 | low | **Opt-in.** Figures in `figures/`, `results/`, … that no code writes |
+| DOC001–003 | high/medium | No README; README without run commands; no LICENSE |
+| DOC004 | medium | **Opt-in.** Code reads data but the README has no data-availability note |
+
+**On by default vs opt-in.** The opt-in checks (PATH001, DATA001, WF001, FIG001, DOC004) missed the precision
+bar (at least 90% overall and no check below 80%) on the last held-out round in [EVALUATION.md](EVALUATION.md), so they are off unless
+you pass `--all-checks` (or `--enable PATH001`, etc.). Their findings are often right but need a human
+to skim them first. With them off, the step table only shows dependency and notebook blockers.
 
 File paths are resolved through simple constants (`DATA = "data"`, `Path(DATA) / "x.csv"`,
 `os.path.join`, f-strings). Downloads (`!wget`, `!curl -o`, `urlretrieve`, `wget.download`) count as
@@ -91,17 +98,17 @@ Top fixes are the issue types contributing the most points, each with a concrete
 
 ## Example report
 
-From [`examples/messy-lab-repo`](examples/messy-lab-repo) (full output in
+From [`examples/messy-lab-repo`](examples/messy-lab-repo), scanned with `--all-checks` (full output in
 [`examples/messy-lab-repo-report.md`](examples/messy-lab-repo-report.md)):
 
-> **Debt score: 79 points — grade F.**
+> **Debt score: 75 points — grade F.**
 >
 > ## Top fixes
 > 1. **Input file missing and nothing creates it** (high, 1 found, 10 pts) — Include these input files, or explain in the README where to download them and where to put them: `data/plate_metadata.csv`.
 > 2. **Notebook uses a name defined in a later cell** (high, 1 found, 10 pts) — Move the cell that defines these names above the cell that uses them, then Restart & Run All: `figures.ipynb:rates`.
 > 3. **Hardcoded absolute path** (high, 1 found, 10 pts) — Replace absolute paths that only exist on your computer with paths relative to the repository (e.g. `Path(__file__).parent / 'data'`). Found: `/Users/alice/Dropbox/lab/raw_counts.csv`.
 > 4. **Imported package not declared** (medium, 2 found, 8 pts) — Add the packages your code imports but your dependency file does not list: `matplotlib`, `sklearn`.
-> 5. **Undocumented intermediate step** (medium, 2 found, 8 pts) — Document the order the scripts must run in (a numbered list in the README, a run_all.sh, or a Makefile/Snakefile). Unclear: `scripts/01_clean.py -> figures.ipynb`, `scripts/01_clean.py -> scripts/02_fit.py`.
+> 5. **Dependencies without exact versions** (medium, 1 found, 4 pts) — Pin exact versions (e.g. `numpy==1.26.4`) so others install what you used. Unpinned: `requirements.txt`.
 >
 > ## Can each step be re-run?
 > | Step | Status | Likely cause if it breaks | Why |
@@ -140,6 +147,7 @@ jobs:
         with:
           path: .            # directory to scan
           exclude: ""        # e.g. "tests vendor/*"
+          all-checks: "false"  # "true" adds the opt-in checks
           fail-above: ""     # e.g. "25" to fail the job above that score
           comment: "true"    # post/update a summary comment on PRs
 ```

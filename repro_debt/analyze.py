@@ -140,6 +140,7 @@ class _Resolver:
 
     def __init__(self) -> None:
         self.names: Dict[str, str] = {}
+        self.loops: Dict[str, List[str]] = {}  # loop variable -> the literal strings it iterates over
 
     def resolve(self, node: ast.AST) -> Optional[str]:
         if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -196,6 +197,48 @@ def _pattern(node: ast.AST, resolver: "_Resolver") -> Optional[str]:
     return None
 
 
+def _expand(node: ast.AST, resolver: "_Resolver") -> Optional[List[str]]:
+    v = resolver.resolve(node)
+    if v is not None:
+        return [v]
+    if isinstance(node, ast.Name) and node.id in resolver.loops:
+        return list(resolver.loops[node.id])
+    parts: List[List[str]] = []
+    sep = ""
+    if isinstance(node, ast.JoinedStr):
+        for x in node.values:
+            e = [str(x.value)] if isinstance(x, ast.Constant) else _expand(x.value, resolver)
+            if e is None:
+                return None
+            parts.append(e)
+    elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Div)):
+        sep = "/" if isinstance(node.op, ast.Div) else ""
+        for x in (node.left, node.right):
+            e = _expand(x, resolver)
+            if e is None:
+                return None
+            parts.append(e)
+    else:
+        return None
+    out = [""]
+    for i, alts in enumerate(parts):
+        out = [o + (sep if i and sep else "") + a for o in out for a in alts][:50]
+    return out
+
+
+def _loop_expansions(node: ast.Call, resolver: "_Resolver", positions=(0,)) -> Optional[List[str]]:
+    if not resolver.loops:
+        return None
+    args = [node.args[i] for i in positions if len(node.args) > i]
+    args += [kw.value for kw in node.keywords if kw.arg in PATH_KWS]
+    for a in args:
+        if isinstance(a, (ast.JoinedStr, ast.BinOp)):
+            e = _expand(a, resolver)
+            if e and len(e) > 1:
+                return e
+    return None
+
+
 def _path_pattern(node: ast.Call, resolver: "_Resolver", positions=(0,)) -> Optional[str]:
     """Glob for a computed output path; only kept when the file name has a real literal stem."""
     args = [node.args[i] for i in positions if len(node.args) > i]
@@ -220,6 +263,16 @@ def _call_name(node: ast.Call) -> Optional[str]:
     if isinstance(f, ast.Attribute):
         return f.attr
     return None
+
+
+def _call_chain_attr(node: ast.AST) -> str:
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+    return ".".join(reversed(parts))
 
 
 def _call_chain(node: ast.Call) -> str:
@@ -372,6 +425,20 @@ def _is_script(src: str, facts: UnitFacts) -> bool:
 NOT_PACKAGES = ("google.colab", "colab", "js", "pyodide", "micropip")  # provided by the runtime, not pip
 
 
+SYSTEM_DIRS = re.compile(r"^[A-Za-z]:[\\/](Program Files|ProgramData|Windows)\b", re.I)
+AMBIGUOUS_ROOT = re.compile(r"^/(data|projects?|n|groups?|srv|work|storage|net)/")
+
+
+def _not_author_path(v: str) -> bool:
+    """Absolute-looking strings that are not paths on the author's machine."""
+    if SYSTEM_DIRS.match(v):
+        return True  # standard install folders of third-party software exist on every Windows machine
+    if AMBIGUOUS_ROOT.match(v):
+        # /data/... and /projects/... are also URL routes and container mount points: only flag file paths
+        return "{" in v or "<" in v or not FILE_EXT.search(v.rstrip("/"))
+    return False
+
+
 def _suffix_constants(tree: ast.AST) -> Set[int]:
     """Ids of string constants appended to something else (`root + "/data/x.csv"`, f"{root}/data")."""
     out: Set[int] = set()
@@ -387,6 +454,8 @@ def _suffix_constants(tree: ast.AST) -> Set[int]:
 
 def _scan_tree(tree: ast.AST, cell: Cell, facts: UnitFacts, resolver: _Resolver) -> None:
     suffixes = _suffix_constants(tree)
+    routes = {id(a) for d in ast.walk(tree) if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef))
+              for dec in d.decorator_list if isinstance(dec, ast.Call) for a in dec.args}  # @app.get("/data/{id}")
     for node in ast.walk(tree):
         line = getattr(node, "lineno", 1)
         if isinstance(node, ast.Import):
@@ -396,6 +465,10 @@ def _scan_tree(tree: ast.AST, cell: Cell, facts: UnitFacts, resolver: _Resolver)
         elif isinstance(node, ast.ImportFrom):
             if node.level == 0 and node.module and not node.module.startswith(NOT_PACKAGES):
                 facts.imports.append(Ref(node.module.split(".")[0], cell.index, line))
+        elif (isinstance(node, ast.For) and isinstance(node.target, ast.Name)
+              and isinstance(node.iter, (ast.List, ast.Tuple)) and node.iter.elts
+              and all(isinstance(e, ast.Constant) and isinstance(e.value, str) for e in node.iter.elts)):
+            resolver.loops[node.target.id] = [e.value for e in node.iter.elts]
         elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             val = resolver.resolve(node.value)
             if val is not None:
@@ -403,7 +476,7 @@ def _scan_tree(tree: ast.AST, cell: Cell, facts: UnitFacts, resolver: _Resolver)
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             v = node.value
             if (ABS_PATH.match(v) and "\n" not in v and len(v) < 300 and " " not in v.strip()[:3]
-                    and id(node) not in suffixes):
+                    and id(node) not in suffixes and id(node) not in routes and not _not_author_path(v)):
                 facts.abs_paths.append(Ref(v, cell.index, line))
         elif isinstance(node, ast.Call):
             _scan_call(node, cell, facts, resolver, line)
@@ -450,7 +523,10 @@ def _scan_call(node: ast.Call, cell: Cell, facts: UnitFacts, resolver: _Resolver
     elif ".random." in f".{chain}." and name in RANDOM_NP and root in ("np", "numpy"):
         facts.random_uses.append(Ref(chain, cell.index, line))
     elif root == "random" and chain.count(".") == 1 and name in RANDOM_STDLIB:
-        facts.random_uses.append(Ref(chain, cell.index, line))
+        if not (name in ("choice", "choices", "sample") and node.args and (
+                (isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str))
+                or _call_chain_attr(node.args[0]).startswith("string."))):
+            facts.random_uses.append(Ref(chain, cell.index, line))  # random letters/digits are IDs, not results
     elif root == "torch" and name in RANDOM_TORCH:
         facts.random_uses.append(Ref(chain, cell.index, line))
     elif name in SKLEARN_RANDOM:
@@ -509,6 +585,10 @@ def _scan_call(node: ast.Call, cell: Cell, facts: UnitFacts, resolver: _Resolver
         positions = (1, 0) if name in ("save", "dump") and root in ("torch", "joblib", "pickle") else (0, 1)
         path = _first_path_arg(node, resolver, positions)
         if path is None:
+            expanded = _loop_expansions(node, resolver, positions)  # for name in ["a", "b"]: f"{name}.csv"
+            if expanded:
+                facts.writes.extend(Ref(x, cell.index, line) for x in expanded if _looks_like_file(x))
+                return
             path = _path_pattern(node, resolver, positions)  # f"stack_{year}.nc" -> "stack_*.nc"
         if path is not None and _looks_like_file(path):
             facts.writes.append(Ref(path, cell.index, line))
@@ -545,10 +625,20 @@ def analyze_r(unit: CodeUnit) -> UnitFacts:
             for m in re.finditer(r"\b" + R_READERS + r"\(\s*(?:file\s*=\s*)?([\"'])([^\"']+)\1", line):
                 if _looks_like_file(m.group(2)):
                     facts.reads.append(Ref(m.group(2), cell.index, n))
-            for m in re.finditer(r"\b" + R_WRITERS + r"\(([^)]*)", line):
-                for s in R_STR.finditer(m.group(1)):
-                    if _looks_like_file(s.group(2)):
-                        facts.writes.append(Ref(s.group(2), cell.index, n))
+            for m in re.finditer(r"\b" + R_WRITERS + r"\((.*)", line):
+                arg = m.group(1)
+                lits = [x.group(2) for x in R_STR.finditer(arg)]
+                if re.match(r"\s*(?:file\s*=\s*|filename\s*=\s*)?(paste0?|file\.path|sprintf|glue|str_c|here)\s*\(", arg):
+                    # computed name such as paste0("go_dotplot_", cl, ".pdf") -> "*go_dotplot_*.pdf"
+                    facts.unresolved_writes += 1
+                    pat = "*" + "*".join(lits) if lits else ""
+                    stem = re.sub(r"\.[A-Za-z0-9]{1,6}$", "", posixpath.basename(pat)).replace("*", "")
+                    if len(re.sub(r"[^A-Za-z0-9]", "", stem)) >= 3:
+                        facts.writes.append(Ref(re.sub(r"\*+", "*", pat), cell.index, n))
+                    continue
+                for lit in lits:
+                    if _looks_like_file(lit):
+                        facts.writes.append(Ref(lit, cell.index, n))
                         break
             if re.search(r"\bset\.seed\(|\b(with|local)_seed\(|\bwith_preserve_seed\(|\bset_random_seed\(", line):
                 facts.has_seed = True

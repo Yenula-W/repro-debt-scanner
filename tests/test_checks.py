@@ -573,3 +573,57 @@ def test_path001_ignores_constants_appended_to_a_root(scan):
     r = scan({"run.py": 'V = get_root()\nSPLITS = (("train", V + "/data/train.csv"),)\np = f"{V}/home/x.csv"\n'
                         'q = "/data/real.csv"\n'})
     assert [f.detail for f in checks_of(r, "PATH001")] == ["/data/real.csv"]
+
+
+# ---------------------------------------------------------------- ship-bar round C regressions
+
+def test_path001_skips_program_files_and_url_routes(scan):
+    r = scan({"run.py": 'from fastapi import APIRouter\nrouter = APIRouter()\n'
+                        'DLL = r"C:\\Program Files\\SharpCap\\x64\\qhyccd.dll"\n'
+                        '@router.get("/projects/{project_id}/revisions")\ndef f(): pass\n'
+                        'API = "/data/items/{id}"\nREAL = "/data/lab/raw.csv"\n'})
+    assert [f.detail for f in checks_of(r, "PATH001")] == ["/data/lab/raw.csv"]
+
+
+def test_loop_built_output_names_are_produced(scan):
+    nb = notebook([
+        ("import pandas as pd\nfrom pathlib import Path\nOUT = Path('out')\n"
+         "for name in ['res_a', 'res_b']:\n    pd.DataFrame().to_csv(OUT / f'{name}.csv')", 1),
+        ("import pandas as pd\nx = pd.read_csv('out/res_b.csv')", 2),
+    ])
+    r = scan({"a.ipynb": nb, "requirements.txt": "pandas==2\n"})
+    assert checks_of(r, "DATA001") == []
+
+
+def test_r_computed_figure_names_suppress_fig001(scan):
+    r = scan({"requirements.txt": None, "DESCRIPTION": "Package: p\nImports: ggplot2\nLicense: MIT\nDepends: R (>= 4)\n",
+              "results/go_dotplot_0.pdf": "x",
+              "pipeline.R": 'for (cl in 0:3) {\n  pdf(file.path(OUT_DIR, paste0("go_dotplot_", cl, ".pdf")))\n}\n'})
+    assert checks_of(r, "FIG001") == []
+
+
+def test_pywin32_modules_map_to_pywin32(scan):
+    r = scan({"requirements.txt": "pywin32==306\n", "hw.py": "import pywintypes, win32con, pythoncom\n"})
+    assert checks_of(r, "DEP003") == []
+
+
+def test_doc004_provenance_section(scan):
+    r = scan({"README.md": "# x\n```\npython run.py\n```\n## Data provenance\nA ClinVar extract, made with bcftools.\n",
+              "run.py": 'open("data/v.vcf")\n'})
+    assert checks_of(r, "DOC004") == []
+
+
+def test_random_identifiers_are_not_results(scan):
+    r = scan({"client.py": "import random, string\n"
+                           "key = ''.join(random.choice('0123456789') for _ in range(19))\n"
+                           "tok = random.choices(string.ascii_letters, k=8)\n"})
+    assert checks_of(r, "RAND001") == []
+
+
+def test_wf001_numbered_files_state_the_order(scan):
+    files = {"requirements.txt": "scanpy==1\n",
+             "notebooks/02_qc.py": 'import scanpy as sc\nsc.AnnData().write_h5ad("02_qc.h5ad")\n',
+             "notebooks/03_annotate.py": 'import scanpy as sc\na = sc.read_h5ad("02_qc.h5ad")\n',
+             "notebooks/plot.py": 'import scanpy as sc\na = sc.read_h5ad("02_qc.h5ad")\n'}
+    r = scan(files)
+    assert [f.file for f in checks_of(r, "WF001")] == ["notebooks/plot.py"]

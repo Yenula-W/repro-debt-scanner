@@ -11,6 +11,9 @@ inputs:
   exclude:
     description: "Space-separated globs/dirs to skip, e.g. 'tests examples/*'."
     default: ""
+  all-checks:
+    description: "Also run the opt-in checks (PATH001, DATA001, WF001, FIG001, DOC004), which are less precise."
+    default: "false"
   fail-above:
     description: "Fail the job if the debt score is above this number. Empty = never fail."
     default: ""
@@ -59,12 +62,14 @@ runs:
         SCAN_PATH: ${{ inputs.path }}
         ANNOTATE: ${{ inputs.annotations }}
         EXCLUDE: ${{ inputs.exclude }}
+        ALL_CHECKS: ${{ inputs.all-checks }}
       run: |
         out="${RUNNER_TEMP}/repro-debt"
         mkdir -p "$out"
         args=(scan "$SCAN_PATH" -q --md "$out/report.md" --json "$out/report.json")
         if [ "$ANNOTATE" = "true" ]; then args+=(--github-annotations); fi
         for g in $EXCLUDE; do args+=(--exclude "$g"); done
+        if [ "$ALL_CHECKS" = "true" ]; then args+=(--all-checks); fi
         repro-debt "${args[@]}"
         cat "$out/report.md" >> "$GITHUB_STEP_SUMMARY"
         python - "$out" <<'PY' >> "$GITHUB_OUTPUT"

@@ -32,6 +32,7 @@ DATA_NOTE = re.compile(
     # data shipped with the code, or pulled from a named public platform
     r"(data|dataset|data ?files?)\b[^.\n]{0,80}\b(in|with) this repo(sitory)?|\bincluded in (this|the) repo|"
     r"data (is|are) (included|provided|bundled)|earth ?engine|planetary computer|copernicus|\bstac\b|"
+    r"provenance|\bclinvar\b|\bgnomad\b|\buniprot\b|\brcsb\b|1000 genomes|\bencode\b|"
     r"\bera5\b|\bnoaa\b|\bnasa\b|\busgs\b|\bgbif\b|\bensembl\b|\bncbi\b|\btcga\b|cellxgene|ukbiobank|uk biobank",
     re.I,
 )
@@ -62,7 +63,8 @@ class ScanResult:
     facts: List[UnitFacts] = field(default_factory=list)
 
 
-def run_checks(repo: Repo) -> ScanResult:
+def run_checks(repo: Repo, enabled: Optional[Set[str]] = None) -> ScanResult:
+    """Run the checks; `enabled` limits which check ids are reported (None = all, including opt-in)."""
     res = ScanResult(repo)
     res.facts = [analyze_unit(u) for u in repo.units]
     f = res.findings
@@ -72,6 +74,8 @@ def run_checks(repo: Repo) -> ScanResult:
     _notebooks(res.facts, f)
     _figures(repo, res.facts, f)
     _docs(repo, res.facts, f)
+    if enabled is not None:
+        f[:] = [x for x in f if x.check in enabled]
     res.steps = _steps(repo, res.facts, f)
     return res
 
@@ -241,6 +245,13 @@ def _exists(repo: Repo, cands: List[str]) -> bool:
     return False
 
 
+def _numbered_before(producer: str, consumer: str) -> bool:
+    """`02_qc.ipynb` before `03_annotate.ipynb`: numbered file names already state the run order."""
+    a = re.match(r"(\d+)[_\-. ]", posixpath.basename(producer))
+    b = re.match(r"(\d+)[_\-. ]", posixpath.basename(consumer))
+    return bool(a and b and int(a.group(1)) < int(b.group(1)))
+
+
 def _tail(p: str) -> str:
     return re.sub(r"^(\.\./)+", "", p).rstrip("/")
 
@@ -309,7 +320,7 @@ def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> Non
             if producer:
                 fa_rec = (fa.unit.path, producer)
                 setattr(ref, "producer", producer)
-                if workflow_doc or posixpath.basename(producer) in repo.readme:
+                if workflow_doc or posixpath.basename(producer) in repo.readme or _numbered_before(producer, fa.unit.path):
                     continue
                 if ("WF", fa_rec) in seen_missing:
                     continue

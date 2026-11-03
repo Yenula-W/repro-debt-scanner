@@ -24,4 +24,4 @@ jobs:
         with:
           path: examples/messy-lab-repo
           comment: "false"
-      - run: test "${{ steps.scan.outputs.grade }}" = "F"
+      - run: test "${{ steps.scan.outputs.grade }}" = "D"

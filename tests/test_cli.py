@@ -9,7 +9,7 @@ def test_cli_writes_reports_and_fails_above(make_repo, tmp_path, capsys):
     root = make_repo({"run.py": 'import pandas\nopen("/Users/x/a.csv")\n'}, base=False)
     md, js = tmp_path / "r.md", tmp_path / "r.json"
     code = main(["scan", str(root), "--md", str(md), "--json", str(js), "--fail-above", "5",
-                 "--github-annotations"])
+                 "--github-annotations", "--enable", "PATH001"])
     out = capsys.readouterr().out
     assert code == 1
     assert "# Reproducibility debt report" in md.read_text()
@@ -39,7 +39,18 @@ def test_every_check_has_fix_text():
 
 def test_exclude(make_repo, capsys):
     root = make_repo({"vendor/x.py": 'open("/Users/x/a.csv")\n'})
-    main(["scan", str(root), "--format", "json"])
+    main(["scan", str(root), "--format", "json", "--all-checks"])
     assert "PATH001" in capsys.readouterr().out
-    main(["scan", str(root), "--format", "json", "--exclude", "vendor"])
+    main(["scan", str(root), "--format", "json", "--all-checks", "--exclude", "vendor"])
     assert "PATH001" not in capsys.readouterr().out
+
+
+def test_opt_in_checks_are_off_by_default(make_repo, capsys):
+    root = make_repo({"run.py": 'import json\njson.load(open("/Users/x/a.json"))\njson.load(open("gone.json"))\n'})
+    main(["scan", str(root), "--format", "json"])
+    ids = {f["check"] for f in json.loads(capsys.readouterr().out)["findings"]}
+    assert not ids & {c.id for c in CHECKS.values() if not c.on_by_default}
+    main(["scan", str(root), "--format", "json", "--enable", "data001"])
+    ids = {f["check"] for f in json.loads(capsys.readouterr().out)["findings"]}
+    assert "DATA001" in ids and "PATH001" not in ids
+    assert main(["scan", str(root), "-q", "--enable", "NOPE1"]) == 2

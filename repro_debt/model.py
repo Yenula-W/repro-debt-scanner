@@ -17,7 +17,11 @@ class CheckInfo:
     severity: str
     category: str  # dependency | data | code | environment | docs | workflow
     fix: str  # plain-English fix; may contain {examples}
+    on_by_default: bool = True  # False = opt-in: did not meet the precision bar on held-out repos
 
+
+OPT_IN_NOTE = ("Opt-in: below the 90%/80% precision bar on held-out repos (see EVALUATION.md). "
+               "Enable with --all-checks or --enable ID.")
 
 CHECKS: Dict[str, CheckInfo] = {
     c.id: c
@@ -35,13 +39,13 @@ CHECKS: Dict[str, CheckInfo] = {
                   "`requires-python` in pyproject.toml, or a `.python-version` file."),
         CheckInfo("PATH001", "Hardcoded absolute path", "high", "data",
                   "Replace absolute paths that only exist on your computer with paths relative to the repository "
-                  "(e.g. `Path(__file__).parent / 'data'`). Found: {examples}."),
+                  "(e.g. `Path(__file__).parent / 'data'`). Found: {examples}.", on_by_default=False),
         CheckInfo("DATA001", "Input file missing and nothing creates it", "high", "data",
                   "Include these input files, or explain in the README where to download them and where to put them: "
-                  "{examples}."),
+                  "{examples}.", on_by_default=False),
         CheckInfo("WF001", "Undocumented intermediate step", "medium", "workflow",
                   "Document the order the scripts must run in (a numbered list in the README, a run_all.sh, "
-                  "or a Makefile/Snakefile). Unclear: {examples}."),
+                  "or a Makefile/Snakefile). Unclear: {examples}.", on_by_default=False),
         CheckInfo("RAND001", "Randomness without a fixed seed", "medium", "code",
                   "Set a random seed at the top of each script/notebook that uses randomness "
                   "(`np.random.seed(0)`, `random.seed(0)`, `torch.manual_seed(0)`, `set.seed(0)` in R) "
@@ -62,7 +66,7 @@ CHECKS: Dict[str, CheckInfo] = {
                   "These notebooks were saved showing errors; fix them and re-run: {examples}."),
         CheckInfo("FIG001", "Result figures with no code that produces them", "low", "workflow",
                   "Add or point to the code that generates these figures (or note they were made by hand): "
-                  "{examples}."),
+                  "{examples}.", on_by_default=False),
         CheckInfo("DOC001", "No README", "high", "docs",
                   "Add a README.md explaining what the code does, how to install dependencies and how to run it."),
         CheckInfo("DOC002", "README lacks run instructions", "medium", "docs",
@@ -72,9 +76,12 @@ CHECKS: Dict[str, CheckInfo] = {
                   "Add a LICENSE file (MIT or BSD-3 are common for research code) so others are allowed to reuse it."),
         CheckInfo("DOC004", "No data availability note", "medium", "docs",
                   "The code reads data files. Add a 'Data availability' section to the README saying where the data "
-                  "lives (e.g. a Zenodo/Figshare DOI) and how to obtain it."),
+                  "lives (e.g. a Zenodo/Figshare DOI) and how to obtain it.", on_by_default=False),
     ]
 }
+
+
+DEFAULT_CHECKS = frozenset(c.id for c in CHECKS.values() if c.on_by_default)
 
 
 @dataclass
