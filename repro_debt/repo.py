@@ -291,7 +291,7 @@ def _parse_env_yml(rel: str, text: str) -> DepSpec:
             continue
         if item.endswith(":"):  # "- pip:"
             continue
-        name = re.split(r"[=<>!~ ]", item, 1)[0]
+        name = re.split(r"[=<>!~ ]", item, maxsplit=1)[0]
         if "::" in name:
             name = name.split("::", 1)[1]
         if not name:
@@ -444,7 +444,7 @@ def _parse_description(repo: Repo, rel: str, text: str) -> None:
         line = _line_of(text, m.start())
         for item in m.group(1).split(","):
             item = item.strip()
-            name = re.split(r"[\s(]", item, 1)[0]
+            name = re.split(r"[\s(]", item, maxsplit=1)[0]
             if not name:
                 continue
             if name == "R":
