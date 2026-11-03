@@ -422,3 +422,27 @@ def test_path001_skips_single_home_folder(scan):
 def test_fig001_skips_images_shown_in_readme(scan):
     r = scan({"README.md": "# x\n![overview](image/fig_main.png)\n```\npython run.py\n```\n", "image/fig_main.png": "x"})
     assert checks_of(r, "FIG001") == []
+
+
+def test_utf16_requirements_from_powershell(make_repo):
+    from repro_debt.checks import run_checks
+    from repro_debt.repo import load_repo
+    root = make_repo({"run.py": "import numpy\n", "requirements.txt": None})
+    (root / "requirements.txt").write_bytes("numpy==1.24.1\r\n".encode("utf-16"))
+    r = run_checks(load_repo(str(root)))
+    assert checks_of(r, "DEP001") == [] and checks_of(r, "DEP003") == []
+
+
+def test_hydra_is_installed_as_hydra_core(scan):
+    r = scan({"requirements.txt": "hydra-core==1.3.2\n", "run.py": "from hydra.utils import instantiate\n"})
+    assert checks_of(r, "DEP003") == []
+
+
+def test_path_open_mode_is_not_a_file(scan):
+    r = scan({"run.py": "from pathlib import Path\nwith Path('README.md').open('r+') as f:\n    f.read()\n"})
+    assert checks_of(r, "DATA001") == []
+
+
+def test_marimo_exports_are_skipped(scan):
+    r = scan({"__marimo__/t.ipynb": notebook([("print(x)", 1), ("x = 1", 2)])})
+    assert checks_of(r, "NB002") == []

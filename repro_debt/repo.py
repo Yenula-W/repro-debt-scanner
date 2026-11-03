@@ -85,7 +85,10 @@ def _read(p: Path, limit: int = MAX_CODE_BYTES) -> Optional[str]:
     try:
         if p.stat().st_size > limit:
             return None
-        return p.read_text(encoding="utf-8", errors="replace")
+        raw = p.read_bytes()
+        if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):  # UTF-16, e.g. `pip freeze > requirements.txt` in PowerShell
+            return raw.decode("utf-16", errors="replace")
+        return raw.decode("utf-8-sig", errors="replace")
     except OSError:
         return None
 
@@ -125,7 +128,7 @@ def _classify(repo: Repo, rel: str) -> None:
             repo.units.append(CodeUnit(rel, "python", False, [Cell(None, src)]))
         if name == "setup.py" and src:
             _parse_setup_py(repo, rel, src)
-    elif lower.endswith(".ipynb"):
+    elif lower.endswith(".ipynb") and "__marimo__/" not in rel:  # marimo's exports have no meaningful cell order
         unit = _load_notebook(p, rel)
         if unit:
             repo.units.append(unit)

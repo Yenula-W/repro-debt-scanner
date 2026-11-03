@@ -411,6 +411,8 @@ def _scan_call(node: ast.Call, cell: Cell, facts: UnitFacts, resolver: _Resolver
         return
 
     # ---- file reads
+    if name == "open" and isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Call):
+        return  # Path(x).open("r+"): the argument is a mode, the path is the receiver
     if name == "open" or (name == "File" and root in ("h5py", "File")):
         if root not in ("", "open", "io", "h5py", "File", "codecs", "gzip", "bz2"):
             return
