@@ -145,7 +145,7 @@ Precision of only the checks that are on by default:
 
 | Round | Precision | Lowest check |
 |---|---|---|
-| A | 77% (39/51) | 40% |
+| A | 79% (42/53) | 40% |
 | B | 98% (48/49) | DEP003 80% |
 | C | 96% (49/51) | 80% |
 
