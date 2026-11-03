@@ -201,9 +201,9 @@ venvs. Every README usage line was run verbatim against a copy of `examples/mess
 
 | Python | pip | Install | README usage |
 |---|---|---|---|
-| 3.9.7 (macOS framework) | 21.2.3 | 8 s | all 8 lines OK: 10 findings by default, 15 with `--all-checks` (grade F), `--fail-above 25` exits 1. That was measured before the switch to "needs review"; usage is now `--confident-only` |
-| 3.12.15 | 25.0.1 | 3 s | identical |
-| 3.13.16 | 26.2.1 | 4 s | identical |
+| 3.9.7 (macOS framework) | 21.2.3 | 8 s | all 8 lines OK on `63f8428`: 15 findings (5 needs review), grade D from the 10 confident ones; 10 with `--confident-only`; `--fail-above 25` exits 1 |
+| 3.12.15 | 25.0.1 | 4 s | identical |
+| 3.13.16 | 26.2.1 | 5 s | identical |
 
 **Optional extras.** The scanner has no runtime dependencies and no optional extras; `[test]` only adds pytest. The
 suite (103 tests) runs on a bare install plus pytest, so there is nothing to skip.
