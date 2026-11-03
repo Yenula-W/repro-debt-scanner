@@ -1,6 +1,7 @@
 """Turn per-file facts into findings and per-step runnability."""
 from __future__ import annotations
 
+import fnmatch
 import glob
 import posixpath
 import re
@@ -27,7 +28,11 @@ DATA_NOTE = re.compile(
     r"data availab|zenodo|figshare|dryad|osf\.io|doi\.org|\b10\.\d{4,}/|download (the )?(raw )?data|"
     r"data (is|are|can be) (available|found|obtained|downloaded)|dataset (is|are) available|access the data|"
     r"data (sources?|access)|obtain the data|kaggle|physionet|openneuro|gene expression omnibus|\bgeo\b|"
-    r"\bsra\b|synapse\.org|huggingface\.co/datasets|data/README",
+    r"\bsra\b|synapse\.org|huggingface\.co/datasets|data/README|"
+    # data shipped with the code, or pulled from a named public platform
+    r"(data|dataset|data ?files?)\b[^.\n]{0,80}\b(in|with) this repo(sitory)?|\bincluded in (this|the) repo|"
+    r"data (is|are) (included|provided|bundled)|earth ?engine|planetary computer|copernicus|\bstac\b|"
+    r"\bera5\b|\bnoaa\b|\bnasa\b|\busgs\b|\bgbif\b|\bensembl\b|\bncbi\b|\btcga\b|cellxgene|ukbiobank|uk biobank",
     re.I,
 )
 ERROR_CLASS = {
@@ -253,6 +258,8 @@ def _producer(produced: Dict[str, str], cands: List[str]) -> Optional[str]:
     for c in cands:
         t = _tail(c)
         for w, prod in produced.items():
+            if "*" in w and (fnmatch.fnmatchcase(t, w) or fnmatch.fnmatchcase(posixpath.basename(t), w)):
+                return prod
             if ("/" not in w or "/" not in t) and (w.endswith("/" + t) or t.endswith("/" + w)):
                 return prod
     return None

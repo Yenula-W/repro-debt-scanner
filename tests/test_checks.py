@@ -542,3 +542,34 @@ def test_notebook_names_defined_through_magics_and_broken_cells(scan):
     ])
     r = scan({"a.ipynb": nb, "requirements.txt": "shapely==2\n"})
     assert checks_of(r, "NB003") == [] and checks_of(r, "NB002") == []
+
+
+# ---------------------------------------------------------------- ship-bar round B regressions
+
+def test_computed_output_names_count_as_produced(scan):
+    r = scan({"requirements.txt": "xarray==2024.1\n",
+              "build_stack.py": 'import xarray as xr\nfor year in (2018, 2023):\n    out = xr.Dataset()\n'
+                                '    out.to_netcdf(f"stack_{year}.nc")\n',
+              "train.py": 'import xarray as xr\nref = xr.open_dataset("stack_2018.nc")\nx = xr.open_dataset("other.nc")\n'
+                          'import pandas as pd\npd.DataFrame().to_csv(f"{x}.csv")\n'})
+    assert [f.detail for f in checks_of(r, "DATA001")] == ["other.nc"]  # "{x}.csv" is too generic to match
+    assert [f.detail for f in checks_of(r, "WF001")] == ["build_stack.py -> train.py"]
+
+
+def test_google_colab_is_not_a_dependency(scan):
+    nb = notebook([("from google.colab import userdata, drive\nimport google.colab", 1)])
+    r = scan({"a.ipynb": nb})
+    assert checks_of(r, "DEP003") == []
+
+
+def test_doc004_data_in_repo_or_public_platform(scan):
+    for readme in ("# x\n```\npython run.py\n```\nReads `final.xlsx`, the cleaned dataset in this repository.\n",
+                   "# x\n```\npython run.py\n```\nImagery comes from Google Earth Engine and Planetary Computer.\n"):
+        r = scan({"README.md": readme, "run.py": 'import json\njson.load(open("a.json"))\n'})
+        assert checks_of(r, "DOC004") == [], readme
+
+
+def test_path001_ignores_constants_appended_to_a_root(scan):
+    r = scan({"run.py": 'V = get_root()\nSPLITS = (("train", V + "/data/train.csv"),)\np = f"{V}/home/x.csv"\n'
+                        'q = "/data/real.csv"\n'})
+    assert [f.detail for f in checks_of(r, "PATH001")] == ["/data/real.csv"]

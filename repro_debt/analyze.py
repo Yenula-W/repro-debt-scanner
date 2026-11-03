@@ -183,6 +183,36 @@ class _Resolver:
         return None
 
 
+def _pattern(node: ast.AST, resolver: "_Resolver") -> Optional[str]:
+    v = resolver.resolve(node)
+    if v is not None:
+        return v.replace("*", "")
+    if isinstance(node, ast.JoinedStr):
+        return "".join(str(x.value) if isinstance(x, ast.Constant) else (
+            _pattern(x.value, resolver) or "*") for x in node.values)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Div)):
+        sep = "/" if isinstance(node.op, ast.Div) else ""
+        return (_pattern(node.left, resolver) or "*") + sep + (_pattern(node.right, resolver) or "*")
+    return None
+
+
+def _path_pattern(node: ast.Call, resolver: "_Resolver", positions=(0,)) -> Optional[str]:
+    """Glob for a computed output path; only kept when the file name has a real literal stem."""
+    args = [node.args[i] for i in positions if len(node.args) > i]
+    args += [kw.value for kw in node.keywords if kw.arg in PATH_KWS]
+    for a in args:
+        if not isinstance(a, (ast.JoinedStr, ast.BinOp)):
+            continue
+        p = _pattern(a, resolver)
+        if not p or "*" not in p:
+            continue
+        p = re.sub(r"\*+", "*", p)
+        stem = re.sub(r"\.[A-Za-z0-9]{1,6}$", "", posixpath.basename(p)).replace("*", "")
+        if len(re.sub(r"[^A-Za-z0-9]", "", stem)) >= 3:
+            return p
+    return None
+
+
 def _call_name(node: ast.Call) -> Optional[str]:
     f = node.func
     if isinstance(f, ast.Name):
@@ -339,14 +369,32 @@ def _is_script(src: str, facts: UnitFacts) -> bool:
     return bool(facts.reads or facts.writes)
 
 
+NOT_PACKAGES = ("google.colab", "colab", "js", "pyodide", "micropip")  # provided by the runtime, not pip
+
+
+def _suffix_constants(tree: ast.AST) -> Set[int]:
+    """Ids of string constants appended to something else (`root + "/data/x.csv"`, f"{root}/data")."""
+    out: Set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Div)) and not (
+                isinstance(node.left, ast.Constant)):
+            if isinstance(node.right, ast.Constant):
+                out.add(id(node.right))
+        elif isinstance(node, ast.JoinedStr):
+            out.update(id(v) for i, v in enumerate(node.values) if i > 0 and isinstance(v, ast.Constant))
+    return out
+
+
 def _scan_tree(tree: ast.AST, cell: Cell, facts: UnitFacts, resolver: _Resolver) -> None:
+    suffixes = _suffix_constants(tree)
     for node in ast.walk(tree):
         line = getattr(node, "lineno", 1)
         if isinstance(node, ast.Import):
             for a in node.names:
-                facts.imports.append(Ref(a.name.split(".")[0], cell.index, line))
+                if not a.name.startswith(NOT_PACKAGES):
+                    facts.imports.append(Ref(a.name.split(".")[0], cell.index, line))
         elif isinstance(node, ast.ImportFrom):
-            if node.level == 0 and node.module:
+            if node.level == 0 and node.module and not node.module.startswith(NOT_PACKAGES):
                 facts.imports.append(Ref(node.module.split(".")[0], cell.index, line))
         elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
             val = resolver.resolve(node.value)
@@ -354,7 +402,8 @@ def _scan_tree(tree: ast.AST, cell: Cell, facts: UnitFacts, resolver: _Resolver)
                 resolver.names[node.targets[0].id] = val
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
             v = node.value
-            if ABS_PATH.match(v) and "\n" not in v and len(v) < 300 and " " not in v.strip()[:3]:
+            if (ABS_PATH.match(v) and "\n" not in v and len(v) < 300 and " " not in v.strip()[:3]
+                    and id(node) not in suffixes):
                 facts.abs_paths.append(Ref(v, cell.index, line))
         elif isinstance(node, ast.Call):
             _scan_call(node, cell, facts, resolver, line)
@@ -459,8 +508,12 @@ def _scan_call(node: ast.Call, cell: Cell, facts: UnitFacts, resolver: _Resolver
     if name in WRITERS:
         positions = (1, 0) if name in ("save", "dump") and root in ("torch", "joblib", "pickle") else (0, 1)
         path = _first_path_arg(node, resolver, positions)
+        if path is None:
+            path = _path_pattern(node, resolver, positions)  # f"stack_{year}.nc" -> "stack_*.nc"
         if path is not None and _looks_like_file(path):
             facts.writes.append(Ref(path, cell.index, line))
+            if "*" in path:
+                facts.unresolved_writes += 1
         elif name in ("savefig", "to_csv", "save", "imwrite", "imsave", "savetxt", "to_parquet", "to_pickle",
                       "write_h5ad", "to_netcdf", "write_image"):
             facts.unresolved_writes += 1
