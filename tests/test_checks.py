@@ -393,3 +393,32 @@ def test_snakemake_env_files_count_as_dependencies(scan):
 def test_pip_install_from_git_url_is_not_a_package_name(scan):
     r = scan({"requirements.txt": None, "nb.ipynb": notebook([("!pip install git+https://github.com/a/b.git pyfaidx==0.8", 1)])})
     assert all("git" not in f.message for f in checks_of(r, "DEP002"))
+
+
+def test_dep002_skips_library_metadata_and_dev_requirements(scan):
+    r = scan({"requirements.txt": None, "pyproject.toml": '[project]\nname="x"\ndependencies = ["numpy>=1.2"]\n',
+              "requirements-dev.txt": "pytest\n", "run.py": "import numpy\n"})
+    assert checks_of(r, "DEP002") == []
+
+
+def test_r_requirenamespace_with_variable_is_not_a_package(scan):
+    r = scan({"DESCRIPTION": "Package: p\nImports: dplyr\n",
+              "R/a.R": "f <- function(package) requireNamespace(package, quietly = TRUE)\nrequireNamespace('dplyr')\n"})
+    assert checks_of(r, "DEP003") == []
+
+
+def test_data001_files_in_a_tools_output_dir_are_produced(scan):
+    r = scan({"nb.ipynb": notebook([("from pathlib import Path\nimport envoi, pandas as pd\nOUT = Path('walk_out')\n"
+                                     "envoi.extract(points, output_dir=OUT)\npd.read_csv(OUT / 'stats.csv')", 1)]),
+              "requirements.txt": "pandas==2.2.0\nenvoi==1.0\n"})
+    assert checks_of(r, "DATA001") == []
+
+
+def test_path001_skips_single_home_folder(scan):
+    r = scan({"run.py": "import os\nos.makedirs(os.path.expanduser('~/envoi_outputs'))\nopen('~/proj/data/x.csv')\n"})
+    assert [f.detail for f in checks_of(r, "PATH001")] == ["~/proj/data/x.csv"]
+
+
+def test_fig001_skips_images_shown_in_readme(scan):
+    r = scan({"README.md": "# x\n![overview](image/fig_main.png)\n```\npython run.py\n```\n", "image/fig_main.png": "x"})
+    assert checks_of(r, "FIG001") == []

@@ -40,7 +40,7 @@ TEST_FILE = re.compile(r"/(tests?|testthat)/|/test_[^/]*$|_test\.(py|R)$", re.I)
 # package docs, test snapshots and illustrations are not results
 NOT_RESULT_FIG = re.compile(r"/(man|tests?|docs?|pkgdown|vignettes|\.github|assets?|static)/|"
                             r"(logo|banner|icon|hex|sticker|framework|overview|concept|schematic|diagram|"
-                            r"workflow|pipeline|graphical.?abstract|screenshot|architecture)[^/]*$", re.I)
+                            r"workflow|pipeline|graphical.?abstract|screenshot|architecture|overall)[^/]*$", re.I)
 FIG_WRITE_HINT = re.compile(r"savefig|imwrite|imsave|write_image|ggsave|png\(|pdf\(")
 
 
@@ -117,7 +117,11 @@ def _deps(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
         if not repo.has_lock:
             for d in repo.deps:
                 # R packages state minimum versions in DESCRIPTION by convention; docs/ deps don't affect results
-                if posixpath.basename(d.file) == "DESCRIPTION" or d.file.startswith(("docs/", "doc/")):
+                # Exact pins belong in requirements/environment files. Package metadata (DESCRIPTION, pyproject,
+                # setup.py) states ranges by convention; dev/test/docs/CI requirement files don't affect results.
+                base = posixpath.basename(d.file)
+                if base in ("DESCRIPTION", "pyproject.toml", "setup.py", "setup.cfg") or d.file.startswith(
+                        ("docs/", "doc/")) or re.search(r"dev|test|doc|lint|ci\b|gh-action|mypy|build", base, re.I):
                     continue
                 if d.unpinned:
                     names = list(OrderedDict.fromkeys(n for n, _ in d.unpinned))
@@ -229,6 +233,8 @@ def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> Non
     seen_abs: Set[Tuple[str, str]] = set()
     for fa in facts:
         for ref in fa.abs_paths:
+            if re.match(r"^~/[^/]+/?$", ref.path):
+                continue  # `~/some_output` is created on any machine; only deeper home paths are author-specific
             key = (fa.unit.path, ref.path)
             if key in seen_abs:
                 continue
@@ -237,8 +243,12 @@ def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> Non
                              fa.unit.path, ref.line, ref.cell, detail=ref.path))
 
     produced: Dict[str, str] = {}  # normalized path or basename -> producing file
+    produced_dirs: List[str] = []  # folders a tool was told to write into (output_dir=...)
     for fa in facts:
         for ref in fa.writes:
+            if ref.path.endswith("/*"):
+                produced_dirs += [c[:-2] for c in _candidates(fa.unit.path, ref.path)]
+                continue
             if ABS_PATH.match(ref.path):
                 continue
             for c in _candidates(fa.unit.path, ref.path):
@@ -271,6 +281,8 @@ def _paths_and_data(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> Non
                 f.append(Finding("WF001", f"Reads `{p}`, which is created by `{producer}`, but nothing says "
                                  f"`{producer}` must run first.", fa.unit.path, ref.line, ref.cell,
                                  detail=f"{producer} -> {fa.unit.path}"))
+                continue
+            if any(c.startswith(d + "/") for c in cands for d in produced_dirs):
                 continue
             if fa_key in seen_missing or _documented(repo, p):
                 continue
@@ -392,7 +404,7 @@ def _notebooks(facts: List[UnitFacts], f: List[Finding]) -> None:
 
 def _figures(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
     figs = [p for p in repo.files if FIG_EXT.search(p) and FIG_DIR.search("/" + p)
-            and not NOT_RESULT_FIG.search("/" + p)]
+            and not NOT_RESULT_FIG.search("/" + p) and posixpath.basename(p) not in repo.readme]  # README art
     if not figs:
         return
     if any(fa.unresolved_writes for fa in facts):

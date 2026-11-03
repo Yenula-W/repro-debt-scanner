@@ -361,12 +361,22 @@ def _first_path_arg(node: ast.Call, resolver: _Resolver, positions=(0,)) -> Opti
     return None
 
 
+OUTPUT_DIR_KW = re.compile(r"^(output|out|save|results?|export)_?(dir|directory|folder|path)$|^outdir$", re.I)
+
+
 def _scan_call(node: ast.Call, cell: Cell, facts: UnitFacts, resolver: _Resolver, line: int) -> None:
     name = _call_name(node)
     chain = _call_chain(node)
     if not name:
         return
     root = chain.split(".")[0] if chain else ""
+
+    # ---- a tool told to write into a folder produces whatever is later read from it
+    for kw in node.keywords:
+        if kw.arg and OUTPUT_DIR_KW.match(kw.arg):
+            d = resolver.resolve(kw.value)
+            if d:
+                facts.writes.append(Ref(d.rstrip("/") + "/*", cell.index, line))
 
     # ---- randomness
     if name in SEED_CALLS:
@@ -445,8 +455,9 @@ def analyze_r(unit: CodeUnit) -> UnitFacts:
             continue
         for n, raw in enumerate(cell.source.splitlines(), 1):
             line = raw.split("#")[0] if "#" in raw and not re.search(r"[\"'][^\"']*#", raw) else raw
-            for m in re.finditer(r"\b(?:library|require|requireNamespace)\(\s*[\"']?([A-Za-z0-9.]+)", line):
-                facts.imports.append(Ref(m.group(1), cell.index, n))
+            for m in re.finditer(r"\b(?:library|require)\(\s*[\"']?([A-Za-z0-9.]+)|"
+                                 r"\brequireNamespace\(\s*[\"']([A-Za-z0-9.]+)[\"']", line):
+                facts.imports.append(Ref(m.group(1) or m.group(2), cell.index, n))
             for m in re.finditer(r"\b(?:p_load)\(([^)]*)\)", line):
                 for pkg in re.findall(r"[A-Za-z][A-Za-z0-9.]+", m.group(1)):
                     facts.imports.append(Ref(pkg, cell.index, n))
@@ -465,8 +476,9 @@ def analyze_r(unit: CodeUnit) -> UnitFacts:
                         break
             if re.search(r"\bset\.seed\(", line):
                 facts.has_seed = True
-            if re.search(r"\b(sample|rnorm|runif|rbinom|rpois|sample_n|sample_frac|slice_sample|kmeans|randomForest|createDataPartition|rexp|rgamma|rbeta)\(", line):
-                facts.random_uses.append(Ref(line.strip()[:40], cell.index, n))
+            rm = re.search(r"\b(sample|rnorm|runif|rbinom|rpois|sample_n|sample_frac|slice_sample|kmeans|randomForest|createDataPartition|rexp|rgamma|rbeta)\(", line)
+            if rm:
+                facts.random_uses.append(Ref(rm.group(1), cell.index, n))
     return facts
 
 
