@@ -263,7 +263,7 @@
     },
     {
       "check": "RAND001",
-      "message": "Uses randomness (np.random.normal, train_test_split; 2 call(s)) but never sets a seed, so results change on every run.",
+      "message": "Uses randomness (np.random.normal, train_test_split; 2 call(s)) without setting a seed, so results can differ between runs.",
       "file": "scripts/02_fit.py",
       "line": 7,
       "cell": null,

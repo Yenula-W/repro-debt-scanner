@@ -40,7 +40,7 @@ _Lower is better. Each issue type adds points by severity (high 10, medium 4, lo
 | medium | ENV001 Python/R version not recorded | `(repository)` | The Python version used is not recorded anywhere (notebook metadata says 3.9.7, but that is not an installable spec). |
 | medium | NB001 Notebook cells executed out of order | `figures.ipynb cell 2` | Cell 2 (run #3) was executed before cell 1 (run #7) above it; the saved results came from running cells out of order. |
 | medium | NB005 Notebook saved with error outputs | `figures.ipynb cell 3` | Cell 3 was saved showing `FileNotFoundError: clean_counts.csv` (looks like a data problem). |
-| medium | RAND001 Randomness without a fixed seed | `scripts/02_fit.py:7` | Uses randomness (np.random.normal, train_test_split; 2 call(s)) but never sets a seed, so results change on every run. |
+| medium | RAND001 Randomness without a fixed seed | `scripts/02_fit.py:7` | Uses randomness (np.random.normal, train_test_split; 2 call(s)) without setting a seed, so results can differ between runs. |
 | medium | WF001 Undocumented intermediate step | `figures.ipynb cell 2 line 2` | Reads `clean_counts.csv`, which is created by `scripts/01_clean.py`, but nothing says `scripts/01_clean.py` must run first. |
 | medium | WF001 Undocumented intermediate step | `scripts/02_fit.py:5` | Reads `clean_counts.csv`, which is created by `scripts/01_clean.py`, but nothing says `scripts/01_clean.py` must run first. |
 | low | FIG001 Result figures with no code that produces them | `figures/fig2_supplement.png` | 1 figure/result file(s) have no code in the repo that writes them: figures/fig2_supplement.png. |

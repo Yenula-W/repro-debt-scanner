@@ -310,7 +310,7 @@ def _randomness(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
             first = fa.random_uses[0]
             kinds = sorted({r.path.split("(")[0] for r in fa.random_uses})[:4]
             f.append(Finding("RAND001", f"Uses randomness ({', '.join(kinds)}; {len(fa.random_uses)} call(s)) "
-                             "but never sets a seed, so results change on every run.",
+                             "without setting a seed, so results can differ between runs.",
                              fa.unit.path, first.line, first.cell, detail=fa.unit.path))
 
 
