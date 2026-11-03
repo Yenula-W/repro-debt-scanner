@@ -106,3 +106,23 @@ def test_checks_command_lists_precision_and_tags(capsys):
         line = next(l for l in out.splitlines() if l.startswith(c.id + " "))
         assert ("[needs review]" in line) == c.needs_review
         assert "%" in line or "not sampled" in line
+
+
+def test_confident_only_does_not_leak_into_steps(make_repo, tmp_path, capsys):
+    # WF001 (needs review) links model.py to clean.py; DATA001/PATH001 also only need review
+    root = make_repo({"requirements.txt": "pandas==2.0\n", "raw.csv": "a\n1\n",
+                      "clean.py": 'import pandas as pd\npd.read_csv("raw.csv").to_csv("clean.csv")\n',
+                      "model.py": 'import pandas as pd\ndf = pd.read_csv("clean.csv")\nm = pd.read_csv("gone.csv")\n'
+                                  'open("/Users/x/a.csv")\n'})
+    js = tmp_path / "r.json"
+    main(["scan", str(root), "--confident-only", "--json", str(js), "--github-annotations"])
+    out = capsys.readouterr().out
+    data = json.loads(js.read_text())
+    assert all(s["upstream"] == [] and s["status"] == "runnable" and s["reasons"] == [] for s in data["steps"])
+    assert "needs review" not in out.lower() and "needs output of" not in out
+    for cid in ("WF001", "DATA001", "PATH001"):
+        assert cid not in out and cid not in js.read_text()
+    # without the flag the same links are shown, tagged
+    main(["scan", str(root), "--format", "json"])
+    steps = {s["file"]: s for s in json.loads(capsys.readouterr().out)["steps"]}
+    assert steps["model.py"]["upstream"] == ["clean.py"] and steps["model.py"]["status"] == "blocked"

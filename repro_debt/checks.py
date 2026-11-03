@@ -76,7 +76,7 @@ def run_checks(repo: Repo, enabled: Optional[Set[str]] = None) -> ScanResult:
     _docs(repo, res.facts, f)
     if enabled is not None:
         f[:] = [x for x in f if x.check in enabled]
-    res.steps = _steps(repo, res.facts, f)
+    res.steps = _steps(repo, res.facts, f, link_upstream=enabled is None or "WF001" in enabled)
     return res
 
 
@@ -490,7 +490,12 @@ def _docs(repo: Repo, facts: List[UnitFacts], f: List[Finding]) -> None:
 
 # ------------------------------------------------------------------ steps (partial reproducibility)
 
-def _steps(repo: Repo, facts: List[UnitFacts], findings: List[Finding]) -> List[Step]:
+def _steps(repo: Repo, facts: List[UnitFacts], findings: List[Finding], link_upstream: bool = True) -> List[Step]:
+    """Per-file runnability from the reported findings only.
+
+    Upstream links come from WF001's producer matching (a needs-review check), so they are dropped when WF001
+    is not reported (e.g. --confident-only).
+    """
     by_file: Dict[str, List[Finding]] = {}
     for x in findings:
         if x.file:
@@ -530,7 +535,7 @@ def _steps(repo: Repo, facts: List[UnitFacts], findings: List[Finding]) -> List[
             cats.append("code")
         for ref in fa.reads:
             prod = getattr(ref, "producer", None)
-            if prod and prod != fa.unit.path and prod not in s.upstream:
+            if link_upstream and prod and prod != fa.unit.path and prod not in s.upstream:
                 s.upstream.append(prod)
         if cats:
             s.status = "blocked"
