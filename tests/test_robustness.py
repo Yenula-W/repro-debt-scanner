@@ -103,3 +103,9 @@ def test_skips_vendored_dirs(tmp_path):
         p.mkdir(parents=True)
         (p / "bad.py").write_text("open('/Users/me/secret.csv')\n")
     assert checks_of(_scan_dir(tmp_path), "PATH001") == []
+
+
+def test_scanned_code_warnings_are_not_printed(tmp_path, recwarn):
+    (tmp_path / "a.py").write_text('p = "D:\\Learning\\x.tif"\n')
+    run_checks(load_repo(str(tmp_path)))
+    assert not [w for w in recwarn if issubclass(w.category, SyntaxWarning)]

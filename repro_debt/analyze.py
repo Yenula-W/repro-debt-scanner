@@ -5,6 +5,7 @@ import ast
 import os
 import posixpath
 import re
+import warnings
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -373,7 +374,9 @@ def analyze_python(unit: CodeUnit) -> UnitFacts:
         if unit.is_notebook and re.search(r"^\s*%(run|store\s+-r|load)\b", cell.source, re.M):
             facts.cell_flow.append((cell.index or 0, set(), [], True))
         try:
-            tree = ast.parse(src)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")  # e.g. invalid escapes in the scanned code, not ours
+                tree = ast.parse(src)
         except (SyntaxError, ValueError):
             facts.syntax_errors.append(Ref("", cell.index, 1))
             if unit.is_notebook:  # still record what it defines, so later cells are not misjudged
