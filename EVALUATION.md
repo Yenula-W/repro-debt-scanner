@@ -1,7 +1,7 @@
 # Evaluation
 
-Measured on 2026-11-02/03 against the shared adoption-ready bar (`~/Desktop/LabAdoption/ADOPTION_BAR.md`) and
-then the stricter ship bar (`~/Desktop/LabAdoption/SHIP_BAR.md`, section 7).
+Measured on 2026-11-02/03 against two internal quality bars: an adoption-ready bar, then a stricter ship bar
+(section 7).
 
 Summary: **does not meet the ship bar.** None of the 3 allowed untouched rounds passed. The five checks still below
 80% after the last round (PATH001, DATA001, WF001, FIG001, DOC004) run by default but are tagged **"needs review"**
@@ -52,8 +52,7 @@ others. By main language: 24 Jupyter, 24 R and 10 Python.
 
 Results: 0 crashes, at most 5.5 s per repo (most under 1 s), and 776 findings in the final run.
 
-It was also run on the 12 repos used for outreach batch 1. Those were hand-checked separately; see
-`~/Desktop/LabAdoption/outreach/repro-debt-batch1`.
+It was also run on 12 further repos that were hand-checked separately (not listed here).
 
 Repos: GenoMAS, Physics-aware-Multiplex-GNN, snputils, xhydro, GENetLib, aquascope, GeoAnalyze, envoi, easymeta,
 STEM-Automated-Nanoparticle-Analysis, SNPBag, hce-classification, pinn-infectious-disease,
@@ -105,13 +104,14 @@ real failures.
 ## 6. Messages
 
 Every message names the file, the line or cell, and what to change. None of them calls a recommendation an
-"error". Outreach copies of the reports leave out the debt grade.
+"error".
 
 ## 7. Ship-bar rounds (2026-11-03)
 
-Rules (from `SHIP_BAR.md`):
+Rules of the ship bar:
 - Each round uses 25 new public repos, never used before. They were drawn by GitHub topic search across 20 fields
-  and excluded the 58-repo corpus, outreach batch 1 and the 4 development repos.
+  and excluded every repo used earlier (the 58-repo corpus, the 12 separately checked repos and the 4 development
+  repos).
 - The precision numbers below come from the **first run, before any change**.
 - About 5 findings per check were hand-judged against the source. "Debatable" counts as passing.
 - A round passes at ≥90% overall, no check below 80%, 0 crashes and 0 overstated claims.

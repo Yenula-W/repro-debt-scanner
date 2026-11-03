@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use repro-debt-scanner in your work, please cite it as below."
+title: "repro-debt-scanner: a scored, prioritized reproducibility report for research code"
+type: software
+authors:
+  - given-names: Yenula
+    family-names: Wickramasinghe
+version: 0.1.0
+date-released: 2026-11-03
+license: MIT
+repository-code: "https://github.com/Yenula-W/repro-debt-scanner"
+keywords:
+  - reproducibility
+  - research software
+  - Jupyter
+  - static analysis

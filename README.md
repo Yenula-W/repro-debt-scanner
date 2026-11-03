@@ -160,15 +160,24 @@ jobs:
 
 The action installs the scanner, writes the full report to the job summary, annotates files with findings,
 posts the top fixes and step table as a PR comment, and exposes `score`, `grade`, `report-md` and
-`report-json` outputs. While this repository is private, the action can only be used from repositories
-the same account owns, with Actions access enabled in the repo settings.
+`report-json` outputs.
 
-## Limits (MVP)
+## Limitations
 
-- Static only: it cannot know what a dynamically built path points to, or whether code actually runs.
-- Undeclared-import detection uses a name mapping, not package metadata, so unusual import names may be missed.
-- R support is regex based (`library()`, `pkg::`, `read.csv()`, `set.seed()`…); Python is AST based.
-- Quarto/`.qmd`, Julia, MATLAB, Snakemake rule parsing and container builds are not covered yet.
+- **Static analysis only.** It never runs your code, so it cannot see runtime failures, wrong results, or what a
+  path built at runtime points to.
+- **"Needs review" checks are often wrong.** PATH001, DATA001, WF001, FIG001 and DOC004 had about 50% untouched
+  precision on held-out repos. Their findings are listed separately and never count toward the grade. Check each
+  one before passing it on.
+- **Confident checks are not perfect either.** Each round sampled only about 5 findings per check. DEP003 (undeclared
+  imports) uses a name map, not package metadata, so unusual import names can be wrong; its pooled precision was
+  67%. A person should skim any report before sending it to an author.
+- **Local-module imports aren't checked.** It doesn't spot a notebook in a subfolder that imports a repo-root module
+  without a `sys.path` change.
+- **R support is regex based** (`library()`, `pkg::`, `read.csv()`, `set.seed()`…); Python is AST based.
+- **Not covered yet:** Quarto/`.qmd`, Julia, MATLAB, Snakemake rule bodies and container builds.
+
+See [EVALUATION.md](EVALUATION.md) for how it was measured.
 
 ## Development
 
