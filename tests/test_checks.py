@@ -678,3 +678,10 @@ def test_omegaconf_covered_by_hydra_core(scan):
     assert checks_of(r, "DEP003") == []
     r = scan({"requirements.txt": "numpy==1.26\n", "run.py": "from omegaconf import OmegaConf\nimport numpy\n"})
     assert [f.detail for f in checks_of(r, "DEP003")] == ["omegaconf"]
+
+
+def test_dep002_counts_conda_r_packages_once(scan):
+    r = scan({"environment.yml": "dependencies:\n  - r-ggplot2\n  - bioconductor-deseq2\n  - salmon=1.10.3\n",
+              "fig.R": "library(ggplot2)\n"})
+    assert "2 of 3 packages" in checks_of(r, "DEP002")[0].message
+    assert checks_of(r, "DEP003") == []  # the alias still satisfies the import

@@ -54,6 +54,7 @@ class DepSpec:
     names: Dict[str, int] = field(default_factory=dict)  # normalized name -> line
     unpinned: List[Tuple[str, int]] = field(default_factory=list)
     python_version: bool = False
+    aliases: List[str] = field(default_factory=list)  # other names that satisfy an import; not extra packages
 
 
 @dataclass
@@ -75,6 +76,7 @@ class Repo:
         out: Set[str] = set()
         for d in self.deps:
             out.update(d.names)
+            out.update(d.aliases)
         return out
 
     def exists(self, rel: str) -> bool:
@@ -303,7 +305,7 @@ def _parse_env_yml(rel: str, text: str) -> DepSpec:
             continue
         d.names[norm_dist(name)] = n
         if name.lower().startswith(("r-", "bioconductor-")):  # conda's names for R packages
-            d.names[norm_dist(name.split("-", 1)[1])] = n
+            d.aliases.append(norm_dist(name.split("-", 1)[1]))
         rest = item[len(name):]
         if not re.search(r"=\s*[0-9]", rest):
             d.unpinned.append((name, n))
