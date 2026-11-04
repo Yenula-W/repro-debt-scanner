@@ -19,7 +19,7 @@ def test_empty_repo(tmp_path):
 
 
 def test_repo_with_only_readme(tmp_path):
-    (tmp_path / "README.md").write_text("# hi\n")
+    (tmp_path / "README.md").write_text("# hi\n", encoding="utf-8")
     assert checks_of(_scan_dir(tmp_path), "DEP001") == []  # no code, nothing to install
 
 
@@ -45,7 +45,7 @@ def test_weird_python_files(tmp_path, content):
     json.dumps({"worksheets": [{"cells": [{"cell_type": "code", "input": "import os"}]}], "nbformat": 3}),
 ])
 def test_malformed_notebooks(tmp_path, raw):
-    (tmp_path / "nb.ipynb").write_text(raw)
+    (tmp_path / "nb.ipynb").write_text(raw, encoding="utf-8")
     _scan_dir(tmp_path)
 
 
@@ -78,22 +78,22 @@ def test_huge_file_is_skipped_not_loaded(tmp_path):
 
 
 def test_r_only_repo(tmp_path):
-    (tmp_path / "DESCRIPTION").write_text("Package: x\nImports:\n    dplyr\n")
-    (tmp_path / "a.R").write_text("library(dplyr)\nlibrary(ggplot2)\nx <- read.csv('in.csv')\n")
+    (tmp_path / "DESCRIPTION").write_text("Package: x\nImports:\n    dplyr\n", encoding="utf-8")
+    (tmp_path / "a.R").write_text("library(dplyr)\nlibrary(ggplot2)\nx <- read.csv('in.csv')\n", encoding="utf-8")
     r = _scan_dir(tmp_path)
     assert [f.detail for f in checks_of(r, "DEP003")] == ["ggplot2"]
     assert len(checks_of(r, "DATA001")) == 1
 
 
 def test_r_notebook_kernel(tmp_path):
-    (tmp_path / "nb.ipynb").write_text(notebook([("library(ggplot2)\nx <- 1", 1)], language="R"))
+    (tmp_path / "nb.ipynb").write_text(notebook([("library(ggplot2)\nx <- 1", 1)], language="R"), encoding="utf-8")
     _scan_dir(tmp_path)
 
 
 def test_deeply_nested_and_unicode_paths(tmp_path):
     d = tmp_path / "données" / "分析" / ("deep/" * 20)
     d.mkdir(parents=True)
-    (d / "run.py").write_text("open('résultats.csv')\n")
+    (d / "run.py").write_text("open('résultats.csv')\n", encoding="utf-8")
     _scan_dir(tmp_path)
 
 
@@ -101,11 +101,11 @@ def test_skips_vendored_dirs(tmp_path):
     for skip in ("node_modules/x", ".git/y", "venv/lib", ".ipynb_checkpoints"):
         p = tmp_path / skip
         p.mkdir(parents=True)
-        (p / "bad.py").write_text("open('/Users/me/secret.csv')\n")
+        (p / "bad.py").write_text("open('/Users/me/secret.csv')\n", encoding="utf-8")
     assert checks_of(_scan_dir(tmp_path), "PATH001") == []
 
 
 def test_scanned_code_warnings_are_not_printed(tmp_path, recwarn):
-    (tmp_path / "a.py").write_text('p = "D:\\Learning\\x.tif"\n')
+    (tmp_path / "a.py").write_text('p = "D:\\Learning\\x.tif"\n', encoding="utf-8")
     run_checks(load_repo(str(tmp_path)))
     assert not [w for w in recwarn if issubclass(w.category, SyntaxWarning)]

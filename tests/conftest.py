@@ -49,7 +49,7 @@ def make_repo(tmp_path):
                 continue
             p = tmp_path / rel
             p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_text(textwrap.dedent(content) if isinstance(content, str) else content)
+            p.write_text(textwrap.dedent(content) if isinstance(content, str) else content, encoding="utf-8")
         return tmp_path
     return _make
 

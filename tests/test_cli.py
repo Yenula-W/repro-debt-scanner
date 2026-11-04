@@ -15,8 +15,8 @@ def test_cli_writes_reports_and_fails_above(make_repo, tmp_path, capsys):
                  "--github-annotations"])
     out = capsys.readouterr().out
     assert code == 1
-    assert "# Reproducibility debt report" in md.read_text()
-    data = json.loads(js.read_text())
+    assert "# Reproducibility debt report" in md.read_text(encoding="utf-8")
+    data = json.loads(js.read_text(encoding="utf-8"))
     assert data["score"]["debt"] > 5 and len(data["top_fixes"]) <= 5
     assert "::error title=DEP001" in out and "::notice file=run.py,line=2,title=[needs review] PATH001" in out
 
@@ -120,11 +120,11 @@ def test_confident_only_does_not_leak_into_steps(make_repo, tmp_path, capsys):
     js = tmp_path / "r.json"
     main(["scan", str(root), "--confident-only", "--json", str(js), "--github-annotations"])
     out = capsys.readouterr().out
-    data = json.loads(js.read_text())
+    data = json.loads(js.read_text(encoding="utf-8"))
     assert all(s["upstream"] == [] and s["status"] == "runnable" and s["reasons"] == [] for s in data["steps"])
     assert "needs review" not in out.lower() and "needs output of" not in out
     for cid in ("WF001", "DATA001", "PATH001"):
-        assert cid not in out and cid not in js.read_text()
+        assert cid not in out and cid not in js.read_text(encoding="utf-8")
     # without the flag the same links are shown, tagged
     main(["scan", str(root), "--format", "json"])
     steps = {s["file"]: s for s in json.loads(capsys.readouterr().out)["steps"]}
