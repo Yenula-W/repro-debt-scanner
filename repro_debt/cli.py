@@ -31,6 +31,8 @@ def scan_path(path: str, exclude: Sequence[str] = (), confident_only: bool = Fal
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    for stream in (sys.stdout, sys.stderr):  # Windows consoles cannot print every character
+        stream.reconfigure(errors="replace")
     ap = argparse.ArgumentParser(prog="repro-debt", description="Scan research code for reproducibility debt.")
     ap.add_argument("--version", action="version", version=__version__)
     sub = ap.add_subparsers(dest="cmd")

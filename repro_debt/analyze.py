@@ -586,7 +586,7 @@ def _scan_call(node: ast.Call, cell: Cell, facts: UnitFacts, resolver: _Resolver
         target.append(Ref(path, cell.index, line))
         return
     if name in ("read_text", "read_bytes") and node.args:
-        return  # Path.read_text() takes no path; with an argument it is importlib.metadata/resources
+        return  # Path.read_text(encoding="utf-8") takes no path; with an argument it is importlib.metadata/resources
     if name in READERS and name not in ("open", "File"):
         if name == "load" and root not in ("np", "numpy", "torch", "joblib", "nib", "nibabel", "sio", "scipy",
                                             "librosa", "mne", "json", "pickle", "yaml", "dill", "h5py", "loadmat"):

@@ -1,4 +1,7 @@
 import json
+import os
+import subprocess
+import sys
 
 from repro_debt.cli import main
 from repro_debt.model import CHECKS, Finding
@@ -132,3 +135,12 @@ def test_no_dependency_file_advice_covers_r(make_repo, capsys):
     # zenodo 18549093: an R-only deposit was told only to run pip freeze.
     main(["scan", str(make_repo({"run.R": "library(dplyr)\n"}, base=False))])
     assert "renv::init()" in capsys.readouterr().out
+
+
+def test_report_survives_a_console_that_cannot_print_emoji(make_repo):
+    # Windows consoles default to cp1252, which has no status emoji.
+    env = dict(os.environ, PYTHONIOENCODING="cp1252")
+    run = subprocess.run([sys.executable, "-m", "repro_debt", "scan", str(make_repo({"run.py": "import pandas\n"}, base=False))],
+                         capture_output=True, env=env)
+    assert run.returncode in (0, 1) and b"Reproducibility debt report" in run.stdout
+
